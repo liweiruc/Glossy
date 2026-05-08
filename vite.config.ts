@@ -11,8 +11,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'icons/*.png'],
       manifest: {
-        name: 'Lexi',
-        short_name: 'Lexi',
+        name: 'Glossy',
+        short_name: 'Glossy',
         description: 'Look up words, translate naturally, remember forever.',
         theme_color: '#BA7517',
         background_color: '#ffffff',

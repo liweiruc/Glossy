@@ -83,7 +83,7 @@ export default function Home() {
       {/* AppBar */}
       <div style={{ height: 48, display: 'flex', alignItems: 'center', padding: '0 18px', flexShrink: 0 }}>
         <div style={{ flex: 1 }} />
-        <span style={{ fontSize: 18, fontWeight: 500, color: 'var(--text-primary)' }}>Lexi</span>
+        <span style={{ fontSize: 18, fontWeight: 500, color: 'var(--text-primary)' }}>Glossy</span>
         <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
           <button
             onClick={() => navigate('/settings')}
@@ -257,7 +257,7 @@ function EmptyState({ onOpen }: { onOpen: () => void }) {
         Set up your AI model first
       </div>
       <p style={{ fontSize: 12, color: 'var(--amber-700)', lineHeight: 1.5, margin: '0 0 16px' }}>
-        Lexi uses any OpenAI-compatible API to look up words and translate. Bring your own key — your data stays on your device.
+        Glossy uses any OpenAI-compatible API to look up words and translate. Bring your own key — your data stays on your device.
       </p>
       <button
         onClick={onOpen}
