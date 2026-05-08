@@ -18,6 +18,8 @@ function ClickableTextInner({ text, onWordClick }: Props) {
   }
   if (last < text.length) parts.push({ kind: 'gap', text: text.slice(last) })
 
+  if (parts.length === 0) return <>{text}</>
+
   return (
     <>
       {parts.map((p, i) =>
@@ -26,6 +28,10 @@ function ClickableTextInner({ text, onWordClick }: Props) {
             key={i}
             className="clickable-word"
             onClick={() => onWordClick(p.text)}
+            style={{
+              borderBottom: '1px dotted var(--border-secondary)',
+              cursor: 'pointer',
+            }}
           >
             {p.text}
           </span>
