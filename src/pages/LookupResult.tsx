@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useLocation, useNavigate } from 'react-router-dom'
 import { ChevronLeft, MoreHorizontal, Volume2, Plus, Check } from 'lucide-react'
 import { db } from '../db'
@@ -7,6 +7,8 @@ import { lookupWord } from '../api/lookup'
 import { getErrorMessage } from '../api/llm'
 import { useToast } from '../components/Toast'
 import ErrorBanner from '../components/ErrorBanner'
+import ClickableText from '../components/ClickableText'
+import WordPopup from '../components/WordPopup'
 
 export default function LookupResult() {
   const { lemma } = useParams<{ lemma: string }>()
@@ -22,6 +24,9 @@ export default function LookupResult() {
   const [expanded, setExpanded] = useState(false)
   const [isAdded, setIsAdded] = useState(false)
   const [retryKey, setRetryKey] = useState(0)
+  const [popupWord, setPopupWord] = useState<string | null>(null)
+
+  const onWordClick = useCallback((w: string) => setPopupWord(w), [])
 
   useEffect(() => {
     if (!lemma) return
@@ -170,7 +175,7 @@ export default function LookupResult() {
             <div>
               {visibleDefs.map((def, i) => (
                 <div key={i}>
-                  <DefinitionBlock def={def} />
+                  <DefinitionBlock def={def} onWordClick={onWordClick} />
                   {i < visibleDefs.length - 1 && (
                     <div style={{ height: '0.5px', background: 'var(--border-tertiary)', margin: '10px 0' }} />
                   )}
@@ -227,6 +232,10 @@ export default function LookupResult() {
           </button>
         </div>
       )}
+
+      {popupWord && (
+        <WordPopup word={popupWord} onClose={() => setPopupWord(null)} />
+      )}
     </div>
   )
 }
@@ -256,7 +265,7 @@ function PhoneticItem({ label, phonetic, word, lang }: {
   )
 }
 
-function DefinitionBlock({ def }: { def: Definition }) {
+function DefinitionBlock({ def, onWordClick }: { def: Definition; onWordClick: (w: string) => void }) {
   return (
     <div style={{ paddingBottom: 4 }}>
       <span style={{
@@ -269,20 +278,20 @@ function DefinitionBlock({ def }: { def: Definition }) {
         {def.pos}
       </span>
       <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.45, marginTop: 4 }}>
-        {def.en}
+        <ClickableText text={def.en} onWordClick={onWordClick} />
       </div>
       <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.45, marginBottom: 6 }}>
-        {def.cn}
+        <ClickableText text={def.cn} onWordClick={onWordClick} />
       </div>
       {def.examples.map((ex, i) => (
         <div key={i} style={{ display: 'flex', marginBottom: 6 }}>
           <div style={{ width: 2, background: 'var(--border-tertiary)', borderRadius: 1, flexShrink: 0, marginRight: 8 }} />
           <div>
             <div style={{ fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.5, fontStyle: 'italic' }}>
-              {ex.en}
+              <ClickableText text={ex.en} onWordClick={onWordClick} />
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              {ex.cn}
+              <ClickableText text={ex.cn} onWordClick={onWordClick} />
             </div>
           </div>
         </div>

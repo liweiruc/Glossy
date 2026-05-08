@@ -58,3 +58,18 @@ body {
 input::placeholder {
   color: var(--text-tertiary);
 }
+
+.clickable-word {
+  cursor: pointer;
+  border-radius: 2px;
+  transition: background-color 0.12s;
+  -webkit-tap-highlight-color: transparent;
+}
+.clickable-word:active {
+  background-color: var(--amber-50);
+}
+@media (hover: hover) {
+  .clickable-word:hover {
+    background-color: var(--amber-50);
+  }
+}
