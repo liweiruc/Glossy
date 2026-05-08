@@ -88,7 +88,7 @@ export interface Setting {
   value: string
 }
 
-class LexiDB extends Dexie {
+class GlossyDB extends Dexie {
   word_cache!: Table<WordCache, string>
   translation_cache!: Table<TranslationCache, string>
   history!: Table<HistoryItem, string>
@@ -109,4 +109,4 @@ class LexiDB extends Dexie {
   }
 }
 
-export const db = new LexiDB()
+export const db = new GlossyDB()

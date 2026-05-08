@@ -1,17 +1,17 @@
 import { db } from '../db'
 
-export type LexiErrorCode = 'auth' | 'balance' | 'model' | 'timeout' | 'server' | 'parse' | 'no_config' | 'network'
+export type GlossyErrorCode = 'auth' | 'balance' | 'model' | 'timeout' | 'server' | 'parse' | 'no_config' | 'network'
 
-export class LexiError extends Error {
-  readonly code: LexiErrorCode
-  constructor(message: string, code: LexiErrorCode) {
+export class GlossyError extends Error {
+  readonly code: GlossyErrorCode
+  constructor(message: string, code: GlossyErrorCode) {
     super(message)
-    this.name = 'LexiError'
+    this.name = 'GlossyError'
     this.code = code
   }
 }
 
-const USER_MESSAGES: Record<LexiErrorCode, string> = {
+const USER_MESSAGES: Record<GlossyErrorCode, string> = {
   auth: 'API key 似乎不正确，请到设置页检查',
   balance: '您的账户余额不足，请到 AI 模型提供商充值',
   model: '模型名称似乎不正确，请到设置页检查',
@@ -23,16 +23,16 @@ const USER_MESSAGES: Record<LexiErrorCode, string> = {
 }
 
 export function getErrorMessage(err: unknown): string {
-  if (err instanceof LexiError) return USER_MESSAGES[err.code]
+  if (err instanceof GlossyError) return USER_MESSAGES[err.code]
   return '发生未知错误，请稍后重试'
 }
 
-function mapHttpError(status: number): LexiError {
-  if (status === 401 || status === 403) return new LexiError('Unauthorized', 'auth')
-  if (status === 402) return new LexiError('Payment required', 'balance')
-  if (status === 404) return new LexiError('Model not found', 'model')
-  if (status >= 500) return new LexiError('Server error', 'server')
-  return new LexiError(`HTTP ${status}`, 'server')
+function mapHttpError(status: number): GlossyError {
+  if (status === 401 || status === 403) return new GlossyError('Unauthorized', 'auth')
+  if (status === 402) return new GlossyError('Payment required', 'balance')
+  if (status === 404) return new GlossyError('Model not found', 'model')
+  if (status >= 500) return new GlossyError('Server error', 'server')
+  return new GlossyError(`HTTP ${status}`, 'server')
 }
 
 function stripMarkdown(text: string): string {
@@ -51,7 +51,7 @@ function parseJSON<T>(text: string): T {
 async function getSettings() {
   const base = await db.settings.get('api_base_url')
   const key = await db.settings.get('api_key')
-  if (!key?.value) throw new LexiError('No API key configured', 'no_config')
+  if (!key?.value) throw new GlossyError('No API key configured', 'no_config')
   return {
     api_base_url: base?.value ?? 'https://api.deepseek.com/v1',
     api_key: key.value,
@@ -78,10 +78,10 @@ async function fetchOnce(prompt: string, model: string): Promise<string> {
     })
   } catch (err) {
     if (err instanceof DOMException && err.name === 'TimeoutError') {
-      throw new LexiError('Request timed out', 'timeout')
+      throw new GlossyError('Request timed out', 'timeout')
     }
-    if (!navigator.onLine) throw new LexiError('No network', 'network')
-    throw new LexiError('Network error', 'network')
+    if (!navigator.onLine) throw new GlossyError('No network', 'network')
+    throw new GlossyError('Network error', 'network')
   }
 
   if (!response.ok) throw mapHttpError(response.status)
@@ -103,7 +103,7 @@ export async function callLLM<T>(prompt: string, model: string): Promise<T> {
     }
   }
 
-  throw new LexiError(`Failed to parse: ${lastText}`, 'parse')
+  throw new GlossyError(`Failed to parse: ${lastText}`, 'parse')
 }
 
 async function streamOnce(prompt: string, model: string, signal?: AbortSignal): Promise<string> {
@@ -132,10 +132,10 @@ async function streamOnce(prompt: string, model: string, signal?: AbortSignal): 
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') throw err
     if (err instanceof DOMException && err.name === 'TimeoutError') {
-      throw new LexiError('Request timed out', 'timeout')
+      throw new GlossyError('Request timed out', 'timeout')
     }
-    if (!navigator.onLine) throw new LexiError('No network', 'network')
-    throw new LexiError('Network error', 'network')
+    if (!navigator.onLine) throw new GlossyError('No network', 'network')
+    throw new GlossyError('Network error', 'network')
   }
 
   if (!response.ok) throw mapHttpError(response.status)
@@ -184,7 +184,7 @@ export async function callLLMStream<T>(prompt: string, model: string, signal?: A
       if (attempt === 0) continue
     }
   }
-  throw new LexiError(`Failed to parse: ${lastBuffer}`, 'parse')
+  throw new GlossyError(`Failed to parse: ${lastBuffer}`, 'parse')
 }
 
 export async function getModel(type: 'lookup' | 'translate'): Promise<string> {
