@@ -11,7 +11,7 @@ import Settings from './pages/Settings'
 export default function App() {
   return (
     <ToastProvider>
-      <BrowserRouter>
+      <BrowserRouter basename={import.meta.env.BASE_URL}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/lookup/:lemma" element={<LookupResult />} />
