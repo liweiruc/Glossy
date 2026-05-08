@@ -1,4 +1,4 @@
-# Lexi — UI 组件描述
+# Glossy — UI 组件描述
 
 > 本文档描述每个屏幕的组件层级、交互行为和视觉细节，供开发时参考。
 > 颜色、字号、间距等数值规范见 PRD 附录 B。
@@ -31,7 +31,7 @@
 
 - 高度约 48px，水平内边距 18px
 - 左区：返回按钮（`ChevronLeft` 图标，20px）或页面标题
-- 中区：页面标题（首页为 App 名"Lexi"，子页为页面名）
+- 中区：页面标题（首页为 App 名"Glossy"，子页为页面名）
 - 右区：操作图标（可选）
 
 ### Toast 提示
@@ -58,7 +58,7 @@
 StatusBar
 AppBar
   左：无
-  中："Lexi"（18px weight500）
+  中："Glossy"（18px weight500）
   右：Settings 图标（`Settings`，20px，次要色）
 Body（padding 水平 18px）
   TabBar（查词 / 翻译）
@@ -102,7 +102,7 @@ BottomNav（Home 激活）
 - 背景：`#FAEEDA`（琥珀 50），圆角 14px，内边距 22px 18px
 - 顶部图标：`Key`（22px，琥珀橙），放在 44px 圆形白色背景中，居中
 - 标题："Set up your AI model first"（15px weight500，`#412402`）
-- 描述："Lexi uses any OpenAI-compatible API to look up words and translate. Bring your own key — your data stays on your device."（12px，`#854F0B`，行高 1.5）
+- 描述："Glossy uses any OpenAI-compatible API to look up words and translate. Bring your own key — your data stays on your device."（12px，`#854F0B`，行高 1.5）
 - 按钮："Open settings"（琥珀橙背景，白色文字，13px weight500，左侧 `ArrowRight` 图标）
 - 卡片下方小字："DeepSeek, OpenAI, Claude, OpenRouter, Ollama, and most others all work."（11px，三级色，居中）
 

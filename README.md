@@ -1,4 +1,4 @@
-# Lexi
+# Glossy
 
 Local-first English learning PWA. Look up words, translate sentences, and remember them with spaced repetition — all running in your browser, with your data stored only on your device.
 
@@ -11,7 +11,7 @@ Local-first English learning PWA. Look up words, translate sentences, and rememb
 
 ## Local-first by design
 
-- All data lives in IndexedDB on your device. There is no Lexi server.
+- All data lives in IndexedDB on your device. There is no Glossy server.
 - No accounts, no cloud sync, no analytics, no telemetry.
 - You bring your own LLM API key. The app calls the LLM directly from your browser; nothing routes through a third party other than the model provider you configured.
 
