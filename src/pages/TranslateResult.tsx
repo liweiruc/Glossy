@@ -2,11 +2,12 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams, useLocation, useNavigate } from 'react-router-dom'
 import { ChevronLeft, RefreshCw, Plus, Check } from 'lucide-react'
 import { db } from '../db'
-import type { TranslationCache, Span, SentenceSnapshot } from '../db'
+import type { TranslationCache, SentenceSnapshot } from '../db'
 import { translateText } from '../api/translate'
 import { getErrorMessage } from '../api/llm'
 import { useToast } from '../components/Toast'
 import WordPopup from '../components/WordPopup'
+import ClickableText from '../components/ClickableText'
 import ErrorBanner from '../components/ErrorBanner'
 
 type Version = 'casual' | 'formal' | 'idiomatic'
@@ -15,29 +16,6 @@ const LABELS: Record<Version, string> = {
   casual: 'Casual',
   formal: 'Formal',
   idiomatic: 'Idiomatic',
-}
-
-function annotate(text: string, spans: Span[], version: Version) {
-  const mine = spans.filter(s => s.version === version)
-  if (!mine.length) return [{ text, span: null as Span | null }]
-
-  const matches: Array<{ start: number; end: number; span: Span }> = []
-  for (const span of mine) {
-    const idx = text.indexOf(span.text)
-    if (idx >= 0) matches.push({ start: idx, end: idx + span.text.length, span })
-  }
-  matches.sort((a, b) => a.start - b.start)
-
-  const result: Array<{ text: string; span: Span | null }> = []
-  let pos = 0
-  for (const m of matches) {
-    if (m.start < pos) continue
-    if (m.start > pos) result.push({ text: text.slice(pos, m.start), span: null })
-    result.push({ text: m.span.text, span: m.span })
-    pos = m.end
-  }
-  if (pos < text.length) result.push({ text: text.slice(pos), span: null })
-  return result
 }
 
 export default function TranslateResult() {
@@ -195,7 +173,7 @@ export default function TranslateResult() {
     showToast('已加入复习本')
   }
 
-  const onSpanClick = useCallback((word: string) => setPopupWord(word), [])
+  const onWordClick = useCallback((word: string) => setPopupWord(word), [])
   const ctaDisabled = allAdded || addedVersions.size > 0
 
   return (
@@ -277,8 +255,6 @@ export default function TranslateResult() {
                 : version === 'formal' ? data.formal_en
                 : data.idiomatic_en
               const vAdded = addedVersions.has(version)
-              const segments = annotate(text, data.spans, version)
-
               return (
                 <div key={version} style={{
                   border: '0.5px solid var(--border-tertiary)',
@@ -306,19 +282,7 @@ export default function TranslateResult() {
                   </div>
 
                   <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.5 }}>
-                    {segments.map((seg, i) =>
-                      seg.span ? (
-                        <span
-                          key={i}
-                          onClick={() => onSpanClick(seg.text)}
-                          style={{ borderBottom: '1px dotted var(--border-secondary)', cursor: 'pointer' }}
-                        >
-                          {seg.text}
-                        </span>
-                      ) : (
-                        <span key={i}>{seg.text}</span>
-                      )
-                    )}
+                    <ClickableText text={text} onWordClick={onWordClick} />
                   </div>
 
                   {version === 'idiomatic' && data.idiomatic_note && (

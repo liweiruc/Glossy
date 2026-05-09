@@ -4,6 +4,7 @@ import { db } from '../db'
 import type { ReviewItem, WordSnapshot, SentenceSnapshot } from '../db'
 import { getDueCount, getReviewItems } from '../db/queries'
 import { dueLabel } from '../utils/time'
+import { hashText } from '../utils/hash'
 import { useToast } from '../components/Toast'
 import BottomNav from '../components/BottomNav'
 
@@ -44,6 +45,22 @@ export default function ReviewBook() {
     if (pressTimer.current) {
       clearTimeout(pressTimer.current)
       pressTimer.current = null
+    }
+  }
+
+  async function handleRowClick(e: React.MouseEvent, item: ReviewItem) {
+    if (pendingDeleteId === item.id) {
+      e.stopPropagation()
+      return
+    }
+    setPendingDeleteId(null)
+    if (item.type === 'word') {
+      const lemma = (item.snapshot as WordSnapshot).lemma
+      navigate('/lookup/' + lemma)
+    } else {
+      const sourceText = (item.snapshot as SentenceSnapshot).source_text
+      const hash = await hashText(sourceText)
+      navigate('/translate/' + hash)
     }
   }
 
@@ -152,6 +169,7 @@ export default function ReviewBook() {
               onMouseLeave={cancelPress}
               onTouchStart={e => { e.stopPropagation(); startPress(item.id) }}
               onTouchEnd={cancelPress}
+              onClick={e => handleRowClick(e, item)}
             >
               {/* Left */}
               <div style={{ flex: 1, minWidth: 0, marginRight: 10 }}>
