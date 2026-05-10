@@ -3,8 +3,8 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
-export default defineConfig(({ command }) => {
-  const base = command === 'build' ? '/Glossy/' : '/'
+export default defineConfig(() => {
+  const base = '/'
   return {
     base,
     plugins: [
@@ -44,8 +44,8 @@ export default defineConfig(({ command }) => {
           navigateFallback: `${base}index.html`,
           runtimeCaching: [
             {
-              // LLM API calls — never cache, let IndexedDB handle it
-              urlPattern: ({ url }) => url.pathname.includes('/chat/completions'),
+              // LLM proxy calls — never cache, always go to network
+              urlPattern: ({ url }) => url.hostname.includes('workers.dev'),
               handler: 'NetworkOnly',
             },
           ],

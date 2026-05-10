@@ -1,6 +1,16 @@
 import { db } from './index'
 import type { ReviewItem, ReviewLog, HistoryItem, WordSnapshot, SentenceSnapshot } from './index'
 import type { SM2Result } from '../algorithms/sm2'
+import { firebaseAuth } from '../firebase'
+import {
+  pushReviewItem,
+  updateReviewItemInFirestore,
+  pushReviewLog,
+} from './firestore-sync'
+
+function uid(): string | null {
+  return firebaseAuth.currentUser?.uid ?? null
+}
 
 export async function getDueItems(): Promise<ReviewItem[]> {
   return db.review_items.where('due_at').belowOrEqual(Date.now()).toArray()
@@ -15,17 +25,29 @@ export async function getReviewItems(): Promise<ReviewItem[]> {
 }
 
 export async function updateItemAfterRating(id: string, result: SM2Result): Promise<void> {
-  await db.review_items.update(id, {
+  const update = {
     ease_factor: result.ease_factor,
     interval_days: result.interval_days,
     repetitions: result.repetitions,
     due_at: result.due_at,
     last_reviewed_at: result.last_reviewed_at,
-  })
+  }
+  await db.review_items.update(id, update)
+  const u = uid()
+  if (u) updateReviewItemInFirestore(u, id, update).catch(() => {})
 }
 
 export async function addReviewLog(log: Omit<ReviewLog, 'id'>): Promise<void> {
-  await db.review_logs.add({ id: crypto.randomUUID(), ...log })
+  const full: ReviewLog = { id: crypto.randomUUID(), ...log }
+  await db.review_logs.add(full)
+  const u = uid()
+  if (u) pushReviewLog(u, full).catch(() => {})
+}
+
+export async function addReviewItem(item: ReviewItem): Promise<void> {
+  await db.review_items.add(item)
+  const u = uid()
+  if (u) pushReviewItem(u, item).catch(() => {})
 }
 
 export async function getHistory(): Promise<HistoryItem[]> {

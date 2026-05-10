@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Clock } from 'lucide-react'
 import { db } from '../db'
 import type { HistoryItem, WordSnapshot, SentenceSnapshot } from '../db'
+import { addReviewItem } from '../db/queries'
 import { dayLabel } from '../utils/time'
 import { useToast } from '../components/Toast'
 import BottomNav from '../components/BottomNav'
@@ -79,7 +80,7 @@ export default function History() {
       if (item.type === 'word') {
         const wordCache = await db.word_cache.get(item.ref_key)
         if (!wordCache) return
-        await db.review_items.add({
+        await addReviewItem({
           id: crypto.randomUUID(),
           type: 'word',
           snapshot: {
@@ -98,7 +99,7 @@ export default function History() {
       } else {
         const transCache = await db.translation_cache.get(item.ref_key)
         if (!transCache) return
-        await db.review_items.add({
+        await addReviewItem({
           id: crypto.randomUUID(),
           type: 'sentence',
           snapshot: {

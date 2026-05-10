@@ -5,6 +5,7 @@ import { db } from '../db'
 import type { TranslationCache, SentenceSnapshot } from '../db'
 import { translateText } from '../api/translate'
 import { getErrorMessage } from '../api/llm'
+import { addReviewItem } from '../db/queries'
 import { useToast } from '../components/Toast'
 import WordPopup from '../components/WordPopup'
 import ClickableText from '../components/ClickableText'
@@ -130,7 +131,7 @@ export default function TranslateResult() {
     if (!data || addedVersions.has(version) || allAdded) return
     const now = Date.now()
     const en = data[`${version}_en` as keyof TranslationCache] as string
-    await db.review_items.add({
+    await addReviewItem({
       id: crypto.randomUUID(),
       type: 'sentence',
       snapshot: {
@@ -153,7 +154,7 @@ export default function TranslateResult() {
   async function handleAddAll() {
     if (!data || allAdded || addedVersions.size > 0) return
     const now = Date.now()
-    await db.review_items.add({
+    await addReviewItem({
       id: crypto.randomUUID(),
       type: 'sentence',
       snapshot: {

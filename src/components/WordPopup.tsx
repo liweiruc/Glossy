@@ -5,6 +5,7 @@ import { db } from '../db'
 import type { WordCache, WordSnapshot, Definition } from '../db'
 import { lookupWord } from '../api/lookup'
 import { getErrorMessage } from '../api/llm'
+import { addReviewItem } from '../db/queries'
 import { useToast } from './Toast'
 
 interface Props {
@@ -40,7 +41,7 @@ export default function WordPopup({ word, onClose }: Props) {
   async function handleAddToReview() {
     if (!wordData || isAdded) return
     const now = Date.now()
-    await db.review_items.add({
+    await addReviewItem({
       id: crypto.randomUUID(),
       type: 'word',
       snapshot: {

@@ -1,8 +1,10 @@
 import { db } from '../db'
 import type { WordCache, Definition } from '../db'
+import { firebaseAuth } from '../firebase'
 import { lemmatize } from '../utils/lemmatize'
 import { callLLMStream, getModel } from './llm'
 import { buildLookupPrompt } from '../prompts/lookup'
+import { getWordFromFirestore, putWordToFirestore, pushHistoryItem } from '../db/firestore-sync'
 
 interface LLMWordResponse {
   word: string
@@ -19,6 +21,7 @@ export async function lookupWord(
   const queried = rawInput.toLowerCase().trim()
   const lemma = lemmatize(queried)
 
+  // 1. Local IndexedDB cache
   const cached = await db.word_cache.get(lemma)
 
   let result: WordCache
@@ -26,31 +29,44 @@ export async function lookupWord(
   if (cached) {
     result = cached
   } else {
-    onProgress?.('loading')
-    const model = await getModel('lookup')
-    const prompt = buildLookupPrompt(lemma)
-    const llmData = await callLLMStream<LLMWordResponse>(prompt, model, signal)
-    onProgress?.('done')
+    // 2. Shared Firestore cache
+    const firestoreCached = await getWordFromFirestore(lemma).catch(() => null)
+    if (firestoreCached) {
+      await db.word_cache.put(firestoreCached)
+      result = firestoreCached
+    } else {
+      // 3. LLM via proxy
+      onProgress?.('loading')
+      const model = await getModel('lookup')
+      const prompt = buildLookupPrompt(lemma)
+      const llmData = await callLLMStream<LLMWordResponse>(prompt, model, signal)
+      onProgress?.('done')
 
-    result = {
-      lemma: (llmData.word || lemma).toLowerCase().trim(),
-      queried_form: queried,
-      phonetic_uk: llmData.phonetic_uk ?? '',
-      phonetic_us: llmData.phonetic_us ?? '',
-      definitions: llmData.definitions ?? [],
-      created_at: Date.now(),
+      result = {
+        lemma: (llmData.word || lemma).toLowerCase().trim(),
+        queried_form: queried,
+        phonetic_uk: llmData.phonetic_uk ?? '',
+        phonetic_us: llmData.phonetic_us ?? '',
+        definitions: llmData.definitions ?? [],
+        created_at: Date.now(),
+      }
+
+      await db.word_cache.put(result)
+      putWordToFirestore(result).catch(() => {})
     }
-
-    await db.word_cache.put(result)
   }
 
-  await db.history.add({
+  const historyItem = {
     id: crypto.randomUUID(),
-    type: 'word',
+    type: 'word' as const,
     ref_key: result.lemma,
     display_text: result.lemma,
     queried_at: Date.now(),
-  })
+  }
+  await db.history.add(historyItem)
+
+  const uid = firebaseAuth.currentUser?.uid
+  if (uid) pushHistoryItem(uid, historyItem).catch(() => {})
 
   return result
 }
