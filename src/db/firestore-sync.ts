@@ -34,10 +34,12 @@ function userCol(uid: string, name: string) {
 }
 
 export async function pushHistoryItem(uid: string, item: HistoryItem): Promise<void> {
+  console.log('[sync] push history', item.id)
   await setDoc(doc(userCol(uid, 'history'), item.id), item)
 }
 
 export async function pushReviewItem(uid: string, item: ReviewItem): Promise<void> {
+  console.log('[sync] push review_item', item.id)
   await setDoc(doc(userCol(uid, 'review_items'), item.id), item)
 }
 
@@ -46,52 +48,71 @@ export async function updateReviewItemInFirestore(
   id: string,
   data: Partial<ReviewItem>,
 ): Promise<void> {
-  const batch = writeBatch(firestore)
-  batch.update(doc(userCol(uid, 'review_items'), id), data as Record<string, unknown>)
-  await batch.commit()
+  console.log('[sync] update review_item', id)
+  await setDoc(doc(userCol(uid, 'review_items'), id), data, { merge: true })
 }
 
 export async function pushReviewLog(uid: string, log: ReviewLog): Promise<void> {
+  console.log('[sync] push review_log', log.id)
   await setDoc(doc(userCol(uid, 'review_logs'), log.id), log)
 }
 
 export async function deleteReviewItemFromFirestore(uid: string, id: string): Promise<void> {
+  console.log('[sync] delete review_item', id)
   await deleteDoc(doc(userCol(uid, 'review_items'), id))
 }
 
-// One-shot pull (kept for the upload-on-login safety net; live data uses subscribeToUserData).
-export async function syncUserDataFromFirestore(uid: string): Promise<void> {
-  const [historySnap, itemsSnap, logsSnap] = await Promise.all([
-    getDocs(userCol(uid, 'history')),
-    getDocs(userCol(uid, 'review_items')),
-    getDocs(userCol(uid, 'review_logs')),
-  ])
-
-  const history = historySnap.docs.map(d => d.data() as HistoryItem)
-  const items = itemsSnap.docs.map(d => d.data() as ReviewItem)
-  const logs = logsSnap.docs.map(d => d.data() as ReviewLog)
-
-  await Promise.all([
-    db.history.bulkPut(history),
-    db.review_items.bulkPut(items),
-    db.review_logs.bulkPut(logs),
-  ])
+// Server-roundtrip health check. setDoc+persistentLocalCache resolves on local write
+// and silently swallows server rejections — this explicit getDocs hits the server and
+// will throw "permission-denied" if the rules aren't deployed.
+export async function verifyFirestoreAccess(uid: string): Promise<boolean> {
+  try {
+    await getDocs(userCol(uid, 'history'))
+    console.log('[sync] ✓ Firestore access OK')
+    return true
+  } catch (e) {
+    console.error(
+      '[sync] ✗ Firestore access FAILED — most likely Firestore security rules are not deployed.',
+      'Deploy with: firebase deploy --only firestore:rules',
+      'Original error:', e,
+    )
+    return false
+  }
 }
 
-// Upload all local IndexedDB data to Firestore (idempotent, used on login as safety net).
-// Chunks writes to respect Firestore's 500-operations-per-batch limit.
-export async function uploadLocalDataToFirestore(uid: string): Promise<void> {
-  const [history, items, logs] = await Promise.all([
-    db.history.toArray(),
-    db.review_items.toArray(),
-    db.review_logs.toArray(),
-  ])
+// Push only items that are missing from the remote — non-destructive.
+// The previous version used setDoc on every local item, which clobbered newer
+// remote state with stale local copies whenever Device B logged in.
+export async function pushLocalOnlyItems(uid: string): Promise<void> {
+  const [remoteHistory, remoteItems, remoteLogs, localHistory, localItems, localLogs] =
+    await Promise.all([
+      getDocs(userCol(uid, 'history')),
+      getDocs(userCol(uid, 'review_items')),
+      getDocs(userCol(uid, 'review_logs')),
+      db.history.toArray(),
+      db.review_items.toArray(),
+      db.review_logs.toArray(),
+    ])
+
+  const remoteHistoryIds = new Set(remoteHistory.docs.map(d => d.id))
+  const remoteItemIds = new Set(remoteItems.docs.map(d => d.id))
+  const remoteLogIds = new Set(remoteLogs.docs.map(d => d.id))
+
+  const newHistory = localHistory.filter(h => !remoteHistoryIds.has(h.id))
+  const newItems = localItems.filter(i => !remoteItemIds.has(i.id))
+  const newLogs = localLogs.filter(l => !remoteLogIds.has(l.id))
+
+  console.log('[sync] uploading local-only items', {
+    history: newHistory.length,
+    review_items: newItems.length,
+    review_logs: newLogs.length,
+  })
 
   type Op = (b: WriteBatch) => void
   const ops: Op[] = [
-    ...history.map(h => (b: WriteBatch) => { b.set(doc(userCol(uid, 'history'), h.id), h) }),
-    ...items.map(i => (b: WriteBatch) => { b.set(doc(userCol(uid, 'review_items'), i.id), i) }),
-    ...logs.map(l => (b: WriteBatch) => { b.set(doc(userCol(uid, 'review_logs'), l.id), l) }),
+    ...newHistory.map(h => (b: WriteBatch) => { b.set(doc(userCol(uid, 'history'), h.id), h) }),
+    ...newItems.map(i => (b: WriteBatch) => { b.set(doc(userCol(uid, 'review_items'), i.id), i) }),
+    ...newLogs.map(l => (b: WriteBatch) => { b.set(doc(userCol(uid, 'review_logs'), l.id), l) }),
   ]
 
   if (ops.length === 0) return
@@ -104,12 +125,13 @@ export async function uploadLocalDataToFirestore(uid: string): Promise<void> {
   }
 }
 
-// Real-time subscription: mirrors per-user Firestore collections into IndexedDB.
-// The first onSnapshot fire delivers the current state (acts as the initial pull),
-// then any remote change is reflected locally within milliseconds.
-// Handles deletions too — items removed remotely are removed from local Dexie.
+// Real-time subscription. First snapshot delivers current state; subsequent fires
+// are server-pushed deltas. Logs metadata so cross-device sync issues are visible
+// in the browser console (fromCache=true means we're not connected to the server).
 export function subscribeToUserData(uid: string): Unsubscribe {
-  const onError = (e: unknown) => console.error('[Firestore listener]', e)
+  const onError = (e: unknown) => console.error('[sync listener]', e)
+
+  console.log('[sync] subscribing for user', uid)
 
   const unsubHistory = onSnapshot(
     userCol(uid, 'history'),
@@ -120,6 +142,10 @@ export function subscribeToUserData(uid: string): Unsubscribe {
         if (change.type === 'removed') deletes.push(change.doc.id)
         else puts.push(change.doc.data() as HistoryItem)
       }
+      console.log(
+        `[sync history] fromCache=${snap.metadata.fromCache} pending=${snap.metadata.hasPendingWrites}`,
+        `+${puts.length} -${deletes.length}`,
+      )
       Promise.all([
         puts.length ? db.history.bulkPut(puts) : Promise.resolve(),
         deletes.length ? db.history.bulkDelete(deletes) : Promise.resolve(),
@@ -137,6 +163,10 @@ export function subscribeToUserData(uid: string): Unsubscribe {
         if (change.type === 'removed') deletes.push(change.doc.id)
         else puts.push(change.doc.data() as ReviewItem)
       }
+      console.log(
+        `[sync review_items] fromCache=${snap.metadata.fromCache} pending=${snap.metadata.hasPendingWrites}`,
+        `+${puts.length} -${deletes.length}`,
+      )
       Promise.all([
         puts.length ? db.review_items.bulkPut(puts) : Promise.resolve(),
         deletes.length ? db.review_items.bulkDelete(deletes) : Promise.resolve(),
@@ -154,6 +184,10 @@ export function subscribeToUserData(uid: string): Unsubscribe {
         if (change.type === 'removed') deletes.push(change.doc.id)
         else puts.push(change.doc.data() as ReviewLog)
       }
+      console.log(
+        `[sync review_logs] fromCache=${snap.metadata.fromCache} pending=${snap.metadata.hasPendingWrites}`,
+        `+${puts.length} -${deletes.length}`,
+      )
       Promise.all([
         puts.length ? db.review_logs.bulkPut(puts) : Promise.resolve(),
         deletes.length ? db.review_logs.bulkDelete(deletes) : Promise.resolve(),
@@ -163,6 +197,7 @@ export function subscribeToUserData(uid: string): Unsubscribe {
   )
 
   return () => {
+    console.log('[sync] unsubscribing for user', uid)
     unsubHistory()
     unsubItems()
     unsubLogs()

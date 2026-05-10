@@ -7,7 +7,11 @@ import {
   onAuthStateChanged,
 } from 'firebase/auth'
 import { firebaseAuth } from '../firebase'
-import { uploadLocalDataToFirestore, subscribeToUserData } from '../db/firestore-sync'
+import {
+  pushLocalOnlyItems,
+  subscribeToUserData,
+  verifyFirestoreAccess,
+} from '../db/firestore-sync'
 
 interface AuthContextValue {
   user: User | null
@@ -38,14 +42,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (firebaseUser) {
         const uid = firebaseUser.uid
-        // Push any local-only data first so the listener doesn't overwrite it with stale remote data
-        try {
-          await uploadLocalDataToFirestore(uid)
-        } catch (e) {
-          console.error('[Firestore sync]', e)
-        }
-        // Then subscribe — first snapshot acts as the initial pull, subsequent ones are real-time
+
+        // Subscribe FIRST — never miss a server-pushed update from another device.
+        // Previously this ran AFTER uploadLocalDataToFirestore, which was destructive
+        // (it overwrote newer remote state with stale local copies on every login).
         unsubscribeData = subscribeToUserData(uid)
+
+        // Health check — surfaces rule deployment issues that are otherwise silent
+        // because setDoc+persistentLocalCache resolves on local write.
+        verifyFirestoreAccess(uid).catch(() => { /* already logged */ })
+
+        // Then non-destructively push only items that are missing from the remote.
+        pushLocalOnlyItems(uid).catch(e => console.error('[sync upload]', e))
       }
     })
 
@@ -55,12 +63,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  // When network returns, re-push any local-only writes that may have been queued during outage
+  // When network returns, retry the local-only-items push for any items created offline.
   useEffect(() => {
     function handleOnline() {
       const uid = firebaseAuth.currentUser?.uid
       if (uid) {
-        uploadLocalDataToFirestore(uid).catch(e => console.error('[Firestore sync]', e))
+        pushLocalOnlyItems(uid).catch(e => console.error('[sync upload]', e))
       }
     }
     window.addEventListener('online', handleOnline)
