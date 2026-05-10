@@ -42,6 +42,8 @@ export default function Login() {
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <input
+            id="email"
+            name="email"
             type="email"
             placeholder="邮箱"
             value={email}
@@ -51,6 +53,8 @@ export default function Login() {
             style={inputStyle}
           />
           <input
+            id="password"
+            name="password"
             type="password"
             placeholder="密码"
             value={password}

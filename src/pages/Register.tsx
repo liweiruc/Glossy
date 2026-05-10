@@ -55,6 +55,8 @@ export default function Register() {
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <input
+            id="email"
+            name="email"
             type="email"
             placeholder="邮箱"
             value={email}
@@ -64,6 +66,8 @@ export default function Register() {
             style={inputStyle}
           />
           <input
+            id="password"
+            name="password"
             type="password"
             placeholder="密码（至少 6 位）"
             value={password}
@@ -73,6 +77,8 @@ export default function Register() {
             style={inputStyle}
           />
           <input
+            id="confirm-password"
+            name="confirm-password"
             type="password"
             placeholder="确认密码"
             value={confirm}
