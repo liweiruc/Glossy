@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Settings as SettingsIcon, ArrowRight, Key, SendHorizontal } from 'lucide-react'
+import { Search, Settings as SettingsIcon, SendHorizontal } from 'lucide-react'
 import { db } from '../db'
 import type { HistoryItem } from '../db'
 import { lemmatize } from '../utils/lemmatize'
@@ -14,14 +14,12 @@ export default function Home() {
   const [lookupQuery, setLookupQuery] = useState('')
   const [translateQuery, setTranslateQuery] = useState('')
   const [hashing, setHashing] = useState(false)
-  const [hasApiKey, setHasApiKey] = useState<boolean | null>(null)
   const [allRecent, setAllRecent] = useState<HistoryItem[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
   const lastInputTime = useRef(0)
   const lastSubmitTime = useRef(0)
 
   useEffect(() => {
-    db.settings.get('api_key').then(s => setHasApiKey(!!(s?.value?.trim())))
     db.history.orderBy('queried_at').reverse().limit(40).toArray().then(setAllRecent)
   }, [])
 
@@ -30,13 +28,11 @@ export default function Home() {
 
   function handleSearch() {
     const now = Date.now()
-    // Debounce: require 300ms gap since last keystroke
     if (now - lastInputTime.current < 300) return
-    // Loading guard: ignore rapid re-submits within 300ms
     if (now - lastSubmitTime.current < 300) return
 
     const word = lookupQuery.trim()
-    if (!word || !hasApiKey) return
+    if (!word) return
     lastSubmitTime.current = now
 
     const lemma = lemmatize(word)
@@ -49,7 +45,7 @@ export default function Home() {
     if (now - lastSubmitTime.current < 300) return
 
     const text = translateQuery.trim()
-    if (!text || hashing || !hasApiKey) return
+    if (!text || hashing) return
     lastSubmitTime.current = now
     setHashing(true)
     try {
@@ -65,8 +61,8 @@ export default function Home() {
     else navigate('/translate/' + item.ref_key)
   }
 
-  const canLookup = !!hasApiKey && !!lookupQuery.trim()
-  const canTranslate = !!hasApiKey && !hashing && !!translateQuery.trim()
+  const canLookup = !!lookupQuery.trim()
+  const canTranslate = !hashing && !!translateQuery.trim()
 
   const spinner = (
     <span style={{
@@ -125,7 +121,6 @@ export default function Home() {
             display: 'flex', alignItems: 'center', gap: 8,
             background: 'var(--bg-secondary)', borderRadius: 10,
             padding: '10px 12px', marginBottom: 24,
-            opacity: hasApiKey ? 1 : 0.5,
           }}>
             <Search size={16} color="var(--text-tertiary)" style={{ flexShrink: 0 }} />
             <input
@@ -135,7 +130,6 @@ export default function Home() {
               onChange={e => { setLookupQuery(e.target.value); lastInputTime.current = Date.now() }}
               onKeyDown={e => e.key === 'Enter' && handleSearch()}
               placeholder="Type an English word"
-              disabled={!hasApiKey}
               style={{
                 flex: 1, border: 'none', background: 'transparent',
                 fontSize: 16, color: 'var(--text-primary)', outline: 'none',
@@ -158,7 +152,6 @@ export default function Home() {
           <div style={{
             background: 'var(--bg-secondary)', borderRadius: 10,
             padding: '10px 12px', marginBottom: 24,
-            opacity: hasApiKey ? 1 : 0.5,
           }}>
             <textarea
               value={translateQuery}
@@ -170,7 +163,6 @@ export default function Home() {
                 }
               }}
               placeholder="输入中文，获取地道英文翻译"
-              disabled={!hasApiKey}
               rows={3}
               style={{
                 width: '100%', border: 'none', background: 'transparent',
@@ -198,11 +190,8 @@ export default function Home() {
           </div>
         )}
 
-        {/* Empty state when no API key */}
-        {hasApiKey === false && <EmptyState onOpen={() => navigate('/settings')} />}
-
         {/* Recent list */}
-        {hasApiKey !== false && recent.length > 0 && (
+        {recent.length > 0 && (
           <section>
             <div style={{
               fontSize: 11, color: 'var(--text-tertiary)',
@@ -239,41 +228,6 @@ export default function Home() {
       </div>
 
       <BottomNav />
-    </div>
-  )
-}
-
-function EmptyState({ onOpen }: { onOpen: () => void }) {
-  return (
-    <div style={{ background: 'var(--amber-50)', borderRadius: 14, padding: '22px 18px', textAlign: 'center' }}>
-      <div style={{
-        width: 44, height: 44, borderRadius: '50%', background: '#fff',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        margin: '0 auto 12px',
-      }}>
-        <Key size={22} color="var(--amber-600)" />
-      </div>
-      <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--amber-900)', marginBottom: 8 }}>
-        Set up your AI model first
-      </div>
-      <p style={{ fontSize: 12, color: 'var(--amber-700)', lineHeight: 1.5, margin: '0 0 16px' }}>
-        Glossy uses any OpenAI-compatible API to look up words and translate. Bring your own key — your data stays on your device.
-      </p>
-      <button
-        onClick={onOpen}
-        style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6,
-          background: 'var(--amber-600)', color: '#fff',
-          border: 'none', borderRadius: 8, padding: '9px 18px',
-          fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
-        }}
-      >
-        <ArrowRight size={14} />
-        Open settings
-      </button>
-      <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 12 }}>
-        DeepSeek, OpenAI, Claude, OpenRouter, Ollama, and most others all work.
-      </p>
     </div>
   )
 }

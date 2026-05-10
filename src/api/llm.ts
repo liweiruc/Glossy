@@ -1,4 +1,3 @@
-import { db } from '../db'
 import { firebaseAuth } from '../firebase'
 
 export type GlossyErrorCode = 'timeout' | 'server' | 'parse' | 'network' | 'unauthenticated'
@@ -96,8 +95,6 @@ export async function callLLMStream<T>(prompt: string, model: string, signal?: A
   return callLLM<T>(prompt, model, signal)
 }
 
-export async function getModel(type: 'lookup' | 'translate'): Promise<string> {
-  const key = type === 'lookup' ? 'model_lookup' : 'model_translate'
-  const setting = await db.settings.get(key)
-  return setting?.value ?? 'deepseek-chat'
+export function getModel(_type: 'lookup' | 'translate'): Promise<string> {
+  return Promise.resolve('deepseek-chat')
 }
