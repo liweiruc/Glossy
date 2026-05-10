@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Clock } from 'lucide-react'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db'
 import type { HistoryItem, WordSnapshot, SentenceSnapshot } from '../db'
 import { addReviewItem } from '../db/queries'
@@ -23,15 +24,9 @@ function subTime(ts: number): string {
 export default function History() {
   const navigate = useNavigate()
   const { showToast } = useToast()
-  const [items, setItems] = useState<HistoryItem[]>([])
-  const [addedIds, setAddedIds] = useState<Set<string>>(new Set())
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
 
-  useEffect(() => {
-    loadData()
-  }, [])
-
-  async function loadData() {
+  const data = useLiveQuery(async () => {
     const [histItems, reviewItems] = await Promise.all([
       db.history.orderBy('queried_at').reverse().toArray(),
       db.review_items.toArray(),
@@ -68,9 +63,11 @@ export default function History() {
       }
     }
 
-    setItems(histItems)
-    setAddedIds(added)
-  }
+    return { items: histItems, addedIds: added }
+  }, [])
+
+  const items = data?.items ?? []
+  const addedIds = data?.addedIds ?? new Set<string>()
 
   async function handleAdd(item: HistoryItem) {
     if (addedIds.has(item.id) || pendingIds.has(item.id)) return
@@ -116,7 +113,6 @@ export default function History() {
           last_reviewed_at: null,
         })
       }
-      setAddedIds(prev => new Set([...prev, item.id]))
       showToast('已加入复习本')
     } finally {
       setPendingIds(prev => {

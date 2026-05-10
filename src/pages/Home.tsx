@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, Settings as SettingsIcon, SendHorizontal } from 'lucide-react'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db'
 import type { HistoryItem } from '../db'
 import { lemmatize } from '../utils/lemmatize'
@@ -14,14 +15,14 @@ export default function Home() {
   const [lookupQuery, setLookupQuery] = useState('')
   const [translateQuery, setTranslateQuery] = useState('')
   const [hashing, setHashing] = useState(false)
-  const [allRecent, setAllRecent] = useState<HistoryItem[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
   const lastInputTime = useRef(0)
   const lastSubmitTime = useRef(0)
 
-  useEffect(() => {
-    db.history.orderBy('queried_at').reverse().limit(40).toArray().then(setAllRecent)
-  }, [])
+  const allRecent = useLiveQuery(
+    () => db.history.orderBy('queried_at').reverse().limit(40).toArray(),
+    [],
+  ) ?? []
 
   const recentType = tab === 'lookup' ? 'word' : 'translation'
   const recent = allRecent.filter(i => i.type === recentType).slice(0, 10)

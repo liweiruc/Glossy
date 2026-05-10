@@ -6,6 +6,7 @@ import {
   pushReviewItem,
   updateReviewItemInFirestore,
   pushReviewLog,
+  deleteReviewItemFromFirestore,
 } from './firestore-sync'
 
 function uid(): string | null {
@@ -48,6 +49,12 @@ export async function addReviewItem(item: ReviewItem): Promise<void> {
   await db.review_items.add(item)
   const u = uid()
   if (u) pushReviewItem(u, item).catch(e => console.error('[Firestore sync]', e))
+}
+
+export async function deleteReviewItem(id: string): Promise<void> {
+  await db.review_items.delete(id)
+  const u = uid()
+  if (u) deleteReviewItemFromFirestore(u, id).catch(e => console.error('[Firestore sync]', e))
 }
 
 export async function getHistory(): Promise<HistoryItem[]> {

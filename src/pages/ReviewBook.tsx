@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db'
 import type { ReviewItem, WordSnapshot, SentenceSnapshot } from '../db'
-import { getDueCount, getReviewItems } from '../db/queries'
+import { deleteReviewItem } from '../db/queries'
 import { dueLabel } from '../utils/time'
 import { hashText } from '../utils/hash'
 import { useToast } from '../components/Toast'
@@ -13,27 +14,20 @@ type SubTab = 'word' | 'sentence'
 export default function ReviewBook() {
   const navigate = useNavigate()
   const { showToast } = useToast()
-  const [dueCount, setDueCount] = useState(0)
-  const [items, setItems] = useState<ReviewItem[]>([])
   const [subTab, setSubTab] = useState<SubTab>('word')
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  useEffect(() => {
-    loadData()
-  }, [])
-
-  async function loadData() {
-    const [count, all] = await Promise.all([getDueCount(), getReviewItems()])
-    setDueCount(count)
-    setItems(all)
-  }
+  const items = useLiveQuery(
+    () => db.review_items.orderBy('added_at').reverse().toArray(),
+    [],
+  ) ?? []
+  const dueCount = items.filter(i => i.due_at <= Date.now()).length
 
   async function handleDelete(id: string) {
-    await db.review_items.delete(id)
+    await deleteReviewItem(id)
     setPendingDeleteId(null)
     showToast('已从复习本移除')
-    loadData()
   }
 
   function startPress(id: string) {

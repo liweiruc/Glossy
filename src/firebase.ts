@@ -17,8 +17,9 @@ const app = initializeApp({
 
 export const firebaseAuth = getAuth(app)
 
-// Persistent IndexedDB cache enables Firestore's built-in offline write queue:
-// writes made while offline are automatically retried when the network returns.
+// Persistent local cache: queues offline writes and retries them when back online,
+// and persists Firestore data across reloads. Multi-tab manager enables sharing
+// the cache across multiple browser tabs.
 export const firestore = initializeFirestore(app, {
   localCache: persistentLocalCache({
     tabManager: persistentMultipleTabManager(),

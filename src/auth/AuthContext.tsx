@@ -7,7 +7,7 @@ import {
   onAuthStateChanged,
 } from 'firebase/auth'
 import { firebaseAuth } from '../firebase'
-import { syncUserDataFromFirestore, uploadLocalDataToFirestore } from '../db/firestore-sync'
+import { uploadLocalDataToFirestore, subscribeToUserData } from '../db/firestore-sync'
 
 interface AuthContextValue {
   user: User | null
@@ -24,44 +24,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    return onAuthStateChanged(firebaseAuth, async (firebaseUser) => {
+    let unsubscribeData: (() => void) | null = null
+
+    const unsubAuth = onAuthStateChanged(firebaseAuth, async (firebaseUser) => {
       setUser(firebaseUser)
       setLoading(false)
+
+      // Tear down any previous user's subscription
+      if (unsubscribeData) {
+        unsubscribeData()
+        unsubscribeData = null
+      }
+
       if (firebaseUser) {
         const uid = firebaseUser.uid
-        syncUserDataFromFirestore(uid)
-          .then(() => uploadLocalDataToFirestore(uid))
-          .catch(e => console.error('[Firestore sync]', e))
+        // Push any local-only data first so the listener doesn't overwrite it with stale remote data
+        try {
+          await uploadLocalDataToFirestore(uid)
+        } catch (e) {
+          console.error('[Firestore sync]', e)
+        }
+        // Then subscribe — first snapshot acts as the initial pull, subsequent ones are real-time
+        unsubscribeData = subscribeToUserData(uid)
       }
     })
+
+    return () => {
+      unsubAuth()
+      if (unsubscribeData) unsubscribeData()
+    }
   }, [])
 
-  // Re-sync when the tab becomes visible again or the network returns.
-  // Visibility → pull (catch up on changes from other devices).
-  // Online → pull + push (catch up AND flush any local writes).
+  // When network returns, re-push any local-only writes that may have been queued during outage
   useEffect(() => {
-    if (!user) return
-    const uid = user.uid
-
-    function pull() {
-      syncUserDataFromFirestore(uid).catch(e => console.error('[Firestore sync]', e))
+    function handleOnline() {
+      const uid = firebaseAuth.currentUser?.uid
+      if (uid) {
+        uploadLocalDataToFirestore(uid).catch(e => console.error('[Firestore sync]', e))
+      }
     }
-    function pullAndPush() {
-      syncUserDataFromFirestore(uid)
-        .then(() => uploadLocalDataToFirestore(uid))
-        .catch(e => console.error('[Firestore sync]', e))
-    }
-    function onVisibility() {
-      if (document.visibilityState === 'visible') pull()
-    }
-
-    window.addEventListener('online', pullAndPush)
-    document.addEventListener('visibilitychange', onVisibility)
-    return () => {
-      window.removeEventListener('online', pullAndPush)
-      document.removeEventListener('visibilitychange', onVisibility)
-    }
-  }, [user])
+    window.addEventListener('online', handleOnline)
+    return () => window.removeEventListener('online', handleOnline)
+  }, [])
 
   async function login(email: string, password: string) {
     await signInWithEmailAndPassword(firebaseAuth, email, password)
