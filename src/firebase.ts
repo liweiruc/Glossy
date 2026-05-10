@@ -1,6 +1,10 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
-import { getFirestore } from 'firebase/firestore'
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from 'firebase/firestore'
 
 const app = initializeApp({
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -12,4 +16,11 @@ const app = initializeApp({
 })
 
 export const firebaseAuth = getAuth(app)
-export const firestore = getFirestore(app)
+
+// Persistent IndexedDB cache enables Firestore's built-in offline write queue:
+// writes made while offline are automatically retried when the network returns.
+export const firestore = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager(),
+  }),
+})
