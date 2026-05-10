@@ -34,20 +34,20 @@ export async function updateItemAfterRating(id: string, result: SM2Result): Prom
   }
   await db.review_items.update(id, update)
   const u = uid()
-  if (u) updateReviewItemInFirestore(u, id, update).catch(() => {})
+  if (u) updateReviewItemInFirestore(u, id, update).catch(e => console.error('[Firestore sync]', e))
 }
 
 export async function addReviewLog(log: Omit<ReviewLog, 'id'>): Promise<void> {
   const full: ReviewLog = { id: crypto.randomUUID(), ...log }
   await db.review_logs.add(full)
   const u = uid()
-  if (u) pushReviewLog(u, full).catch(() => {})
+  if (u) pushReviewLog(u, full).catch(e => console.error('[Firestore sync]', e))
 }
 
 export async function addReviewItem(item: ReviewItem): Promise<void> {
   await db.review_items.add(item)
   const u = uid()
-  if (u) pushReviewItem(u, item).catch(() => {})
+  if (u) pushReviewItem(u, item).catch(e => console.error('[Firestore sync]', e))
 }
 
 export async function getHistory(): Promise<HistoryItem[]> {

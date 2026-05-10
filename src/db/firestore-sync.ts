@@ -1,5 +1,6 @@
 import {
   doc, getDoc, setDoc, collection, getDocs, writeBatch,
+  type WriteBatch,
 } from 'firebase/firestore'
 import { firestore } from '../firebase'
 import { db } from './index'
@@ -69,4 +70,30 @@ export async function updateReviewItemInFirestore(
 
 export async function pushReviewLog(uid: string, log: ReviewLog): Promise<void> {
   await setDoc(doc(userCol(uid, 'review_logs'), log.id), log)
+}
+
+// Upload all local IndexedDB data to Firestore (idempotent, used on login as safety net).
+// Chunks writes to respect Firestore's 500-operations-per-batch limit.
+export async function uploadLocalDataToFirestore(uid: string): Promise<void> {
+  const [history, items, logs] = await Promise.all([
+    db.history.toArray(),
+    db.review_items.toArray(),
+    db.review_logs.toArray(),
+  ])
+
+  type Op = (b: WriteBatch) => void
+  const ops: Op[] = [
+    ...history.map(h => (b: WriteBatch) => b.set(doc(userCol(uid, 'history'), h.id), h as Record<string, unknown>)),
+    ...items.map(i => (b: WriteBatch) => b.set(doc(userCol(uid, 'review_items'), i.id), i as Record<string, unknown>)),
+    ...logs.map(l => (b: WriteBatch) => b.set(doc(userCol(uid, 'review_logs'), l.id), l as Record<string, unknown>)),
+  ]
+
+  if (ops.length === 0) return
+
+  const CHUNK = 400
+  for (let i = 0; i < ops.length; i += CHUNK) {
+    const b = writeBatch(firestore)
+    ops.slice(i, i + CHUNK).forEach(op => op(b))
+    await b.commit()
+  }
 }

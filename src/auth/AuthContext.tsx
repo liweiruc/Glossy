@@ -7,7 +7,7 @@ import {
   onAuthStateChanged,
 } from 'firebase/auth'
 import { firebaseAuth } from '../firebase'
-import { syncUserDataFromFirestore } from '../db/firestore-sync'
+import { syncUserDataFromFirestore, uploadLocalDataToFirestore } from '../db/firestore-sync'
 
 interface AuthContextValue {
   user: User | null
@@ -28,7 +28,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(firebaseUser)
       setLoading(false)
       if (firebaseUser) {
-        syncUserDataFromFirestore(firebaseUser.uid).catch(() => {})
+        const uid = firebaseUser.uid
+        syncUserDataFromFirestore(uid)
+          .then(() => uploadLocalDataToFirestore(uid))
+          .catch(e => console.error('[Firestore sync]', e))
       }
     })
   }, [])

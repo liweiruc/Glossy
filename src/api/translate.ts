@@ -60,7 +60,7 @@ export async function translateText(
       }
 
       await db.translation_cache.put(result)
-      putTranslationToFirestore(result).catch(() => {})
+      putTranslationToFirestore(result).catch(e => console.error('[Firestore sync]', e))
     }
   }
 
@@ -74,7 +74,7 @@ export async function translateText(
   await db.history.add(historyItem)
 
   const uid = firebaseAuth.currentUser?.uid
-  if (uid) pushHistoryItem(uid, historyItem).catch(() => {})
+  if (uid) pushHistoryItem(uid, historyItem).catch(e => console.error('[Firestore sync]', e))
 
   return result
 }
