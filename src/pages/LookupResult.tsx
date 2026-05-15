@@ -21,6 +21,7 @@ export default function LookupResult() {
 
   const [wordData, setWordData] = useState<WordCache | null>(null)
   const [loadingData, setLoadingData] = useState(true)
+  const [streaming, setStreaming] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(false)
   const [isAdded, setIsAdded] = useState(false)
@@ -42,12 +43,15 @@ export default function LookupResult() {
     let cancelled = false
     async function load() {
       setLoadingData(true)
+      setStreaming(false)
       setErrorMsg(null)
       try {
         let data: WordCache | undefined
         if (queriedForm) {
           // From Home search: lookupWord handles cache check + LLM + history recording
-          data = await lookupWord(queriedForm, undefined, controller.signal)
+          data = await lookupWord(queriedForm, undefined, controller.signal, () => {
+            if (!cancelled) setStreaming(true)
+          })
         } else {
           // From History / direct URL: load from cache only, no history recording
           data = await db.word_cache.get(lemma!) ?? undefined
@@ -70,6 +74,7 @@ export default function LookupResult() {
     load()
     return () => {
       cancelled = true
+      setStreaming(false)
       controller.abort()
     }
   }, [lemma, retryKey])
@@ -138,10 +143,17 @@ export default function LookupResult() {
         {loadingData && !wordData && !errorMsg && (
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            marginTop: 80,
+            gap: 7, marginTop: 80,
           }}>
+            {streaming && (
+              <span style={{
+                display: 'inline-block', width: 6, height: 6, borderRadius: '50%',
+                background: 'var(--amber-600)',
+                animation: 'pulse 1s ease-in-out infinite',
+              }} />
+            )}
             <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
-              正在查询 {lemma}...
+              {streaming ? 'AI 正在回复...' : `正在查询 ${lemma}...`}
             </span>
           </div>
         )}

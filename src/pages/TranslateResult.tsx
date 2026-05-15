@@ -29,11 +29,11 @@ export default function TranslateResult() {
 
   const [data, setData] = useState<TranslationCache | null>(null)
   const [loadingData, setLoadingData] = useState(true)
+  const [streaming, setStreaming] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [popupWord, setPopupWord] = useState<string | null>(null)
   const [retryKey, setRetryKey] = useState(0)
-  const [msgIndex, setMsgIndex] = useState(0)
 
   const [addedVersions, setAddedVersions] = useState<Set<Version>>(new Set())
   const [allAdded, setAllAdded] = useState(false)
@@ -45,12 +45,15 @@ export default function TranslateResult() {
     let cancelled = false
     async function load() {
       setLoadingData(true)
+      setStreaming(false)
       setErrorMsg(null)
       try {
         let result: TranslationCache | undefined
         if (sourceText) {
           // From Home translate: translateText handles cache check + LLM + history
-          result = await translateText(sourceText, undefined, controller.signal)
+          result = await translateText(sourceText, undefined, controller.signal, () => {
+            if (!cancelled) setStreaming(true)
+          })
         } else {
           // From History / direct URL: load from cache only
           result = await db.translation_cache.get(hash!) ?? undefined
@@ -89,26 +92,10 @@ export default function TranslateResult() {
     load()
     return () => {
       cancelled = true
+      setStreaming(false)
       controller.abort()
     }
   }, [hash, retryKey])
-
-  const TRANSLATE_MSGS = [
-    '正在理解原文...',
-    '正在生成口语版本...',
-    '正在生成正式版本...',
-    '正在润色地道表达...',
-  ]
-
-  useEffect(() => {
-    if (!loadingData) { setMsgIndex(0); return }
-    setMsgIndex(0)
-    const id = setInterval(
-      () => setMsgIndex(i => Math.min(i + 1, TRANSLATE_MSGS.length - 1)),
-      1000,
-    )
-    return () => clearInterval(id)
-  }, [loadingData])
 
   async function handleRefresh() {
     if (!data || refreshing) return
@@ -224,10 +211,17 @@ export default function TranslateResult() {
         {loadingData && !data && !errorMsg && (
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            marginTop: 80,
+            gap: 7, marginTop: 80,
           }}>
+            {streaming && (
+              <span style={{
+                display: 'inline-block', width: 6, height: 6, borderRadius: '50%',
+                background: 'var(--amber-600)',
+                animation: 'pulse 1s ease-in-out infinite',
+              }} />
+            )}
             <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
-              {TRANSLATE_MSGS[msgIndex]}
+              {streaming ? 'AI 正在回复...' : '正在翻译...'}
             </span>
           </div>
         )}

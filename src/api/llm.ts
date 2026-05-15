@@ -36,7 +36,12 @@ function parseJSON<T>(text: string): T {
   return JSON.parse(stripMarkdown(text)) as T
 }
 
-async function fetchViaProxy(prompt: string, model: string, signal?: AbortSignal): Promise<string> {
+async function fetchViaProxy(
+  prompt: string,
+  model: string,
+  signal?: AbortSignal,
+  onStream?: () => void,
+): Promise<string> {
   const currentUser = firebaseAuth.currentUser
   if (!currentUser) throw new GlossyError('Not authenticated', 'unauthenticated')
 
@@ -70,15 +75,44 @@ async function fetchViaProxy(prompt: string, model: string, signal?: AbortSignal
     throw new GlossyError(`HTTP ${response.status}`, 'server')
   }
 
+  // Streaming response (new worker returns text/plain)
+  const contentType = response.headers.get('Content-Type') ?? ''
+  if (contentType.includes('text/plain') && response.body) {
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let text = ''
+    let streamFired = false
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        text += decoder.decode(value, { stream: true })
+        if (!streamFired) {
+          streamFired = true
+          onStream?.()
+        }
+      }
+    } finally {
+      reader.releaseLock()
+    }
+    return text
+  }
+
+  // Legacy JSON fallback (old worker)
   const data = await response.json() as { text: string }
   return data.text
 }
 
-export async function callLLM<T>(prompt: string, model: string, signal?: AbortSignal): Promise<T> {
+export async function callLLM<T>(
+  prompt: string,
+  model: string,
+  signal?: AbortSignal,
+  onStream?: () => void,
+): Promise<T> {
   let lastText: string | undefined
 
   for (let attempt = 0; attempt < 2; attempt++) {
-    const text = await fetchViaProxy(prompt, model, signal)
+    const text = await fetchViaProxy(prompt, model, signal, attempt === 0 ? onStream : undefined)
     lastText = text
     try {
       return parseJSON<T>(text)
@@ -90,9 +124,14 @@ export async function callLLM<T>(prompt: string, model: string, signal?: AbortSi
   throw new GlossyError(`Failed to parse: ${lastText}`, 'parse')
 }
 
-// Kept for call-site compatibility — identical to callLLM (proxy is non-streaming)
-export async function callLLMStream<T>(prompt: string, model: string, signal?: AbortSignal): Promise<T> {
-  return callLLM<T>(prompt, model, signal)
+// Kept for call-site compatibility
+export async function callLLMStream<T>(
+  prompt: string,
+  model: string,
+  signal?: AbortSignal,
+  onStream?: () => void,
+): Promise<T> {
+  return callLLM<T>(prompt, model, signal, onStream)
 }
 
 export function getModel(_type: 'lookup' | 'translate'): Promise<string> {

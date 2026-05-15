@@ -44,7 +44,7 @@ export default {
       return json({ error: 'Invalid model' }, 400)
     }
 
-    // Call DeepSeek
+    // Call DeepSeek with streaming
     let deepseekRes: Response
     try {
       deepseekRes = await fetch('https://api.deepseek.com/v1/chat/completions', {
@@ -57,6 +57,7 @@ export default {
           model,
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.3,
+          stream: true,
         }),
       })
     } catch {
@@ -67,10 +68,41 @@ export default {
       return json({ error: `Upstream error ${deepseekRes.status}` }, 502)
     }
 
-    const data = await deepseekRes.json() as { choices: { message: { content: string } }[] }
-    const text = data.choices?.[0]?.message?.content ?? ''
+    // Forward SSE deltas as a plain text stream
+    const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>()
+    const writer = writable.getWriter()
+    const enc = new TextEncoder()
+    const dec = new TextDecoder()
 
-    return json({ text }, 200)
+    ;(async () => {
+      const reader = deepseekRes.body!.getReader()
+      let buf = ''
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buf += dec.decode(value, { stream: true })
+          const lines = buf.split('\n')
+          buf = lines.pop() ?? ''
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue
+            const raw = line.slice(6).trim()
+            if (raw === '[DONE]') continue
+            try {
+              const chunk = JSON.parse(raw) as { choices: Array<{ delta: { content?: string } }> }
+              const delta = chunk.choices?.[0]?.delta?.content
+              if (delta) await writer.write(enc.encode(delta))
+            } catch { /* ignore malformed SSE lines */ }
+          }
+        }
+      } finally {
+        await writer.close()
+      }
+    })().catch(() => writer.abort())
+
+    return new Response(readable, {
+      headers: { 'Content-Type': 'text/plain; charset=utf-8', ...CORS_HEADERS },
+    })
   },
 }
 

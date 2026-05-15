@@ -11,7 +11,6 @@ import {
 } from '../db/firestore-sync'
 
 interface LLMTranslateResponse {
-  source: string
   casual: string
   formal: string
   idiomatic: string
@@ -23,6 +22,7 @@ export async function translateText(
   text: string,
   onProgress?: (status: 'loading' | 'done') => void,
   signal?: AbortSignal,
+  onStream?: () => void,
 ): Promise<TranslationCache> {
   const trimmed = text.trim()
   const source_hash = await hashText(trimmed)
@@ -45,7 +45,7 @@ export async function translateText(
       onProgress?.('loading')
       const model = await getModel('translate')
       const prompt = buildTranslatePrompt(trimmed)
-      const llmData = await callLLMStream<LLMTranslateResponse>(prompt, model, signal)
+      const llmData = await callLLMStream<LLMTranslateResponse>(prompt, model, signal, onStream)
       onProgress?.('done')
 
       result = {

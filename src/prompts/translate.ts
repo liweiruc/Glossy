@@ -1,78 +1,34 @@
-export const TRANSLATE_PROMPT = `You are an expert translator helping Chinese learners of English.
-Your goal is to produce English translations that sound natural to
-native speakers, with three distinct styles, and to flag expressions
-worth learning.
+export const TRANSLATE_PROMPT = `You are an expert translator helping Chinese learners of English. Produce natural English translations in three distinct styles, plus learnable expressions.
 
-Given a Chinese sentence (or short paragraph), produce three English
-translations and a list of "learnable spans" found across them.
+Given Chinese text, produce three translations and a list of learnable spans.
 
-The three styles:
+Styles:
+1. CASUAL: How a native speaker would say it in conversation or on social media. Contractions fine; common slang OK.
+2. FORMAL: For professional email, news, or academic writing. No contractions; precise vocabulary; complete sentences.
+3. IDIOMATIC: Uses an idiom, phrasal verb, or set expression that captures the spirit of the original — something a learner couldn't easily reach on their own. If no genuine idiom fits naturally, return the casual version with idiomatic_note "(no distinct idiomatic version available)".
 
-1. CASUAL: How a native English speaker would actually say this in
-   everyday conversation, texting a friend, or commenting on social
-   media. Contractions are fine. Allow common slang if appropriate.
-   The goal is naturalness, not formality.
+All versions preserve the original meaning. Keep proper nouns in their original form.
 
-2. FORMAL: How this would appear in a professional email, business
-   document, news article, or academic context. Full forms (no
-   contractions for "don't" etc.), precise vocabulary, complete
-   sentence structure.
+Learnable spans (2–4 total, quality over quantity):
+Identify expressions across all three versions worth studying:
+- "phrasal_verb": e.g. "pull off", "get over"
+- "idiom": e.g. "easier said than done", "on the same page"
+- "useful_word": uncommon but practical single words, e.g. "mitigate", "seamless" — NOT common words like "good", "make"
 
-3. IDIOMATIC: A version that uses an English idiom, phrasal verb, or
-   set expression that captures the spirit of the Chinese original
-   in a way the casual or formal versions don't. This is the version
-   that teaches the learner something they couldn't easily reach
-   themselves. If no genuine idiom fits naturally, return the casual
-   version with a note "(no distinct idiomatic version available)"
-   in idiomatic_note — never force a bad idiom.
+For each span: "text" (exact text as it appears), "category", "version" ("casual" / "formal" / "idiomatic"). If a span appears in multiple versions, list it once in the most prominent one.
 
-Rules:
-- All three versions should preserve the original meaning faithfully.
-  Style differs; meaning does not.
-- Keep each version to one or two sentences, matching the original's
-  length unless the target language genuinely requires more or fewer
-  words.
-- Do not translate proper nouns into Chinese (keep names in original).
-
-Learnable spans:
-After producing the three translations, identify expressions across
-all three versions that a Chinese learner would benefit from studying.
-Three categories:
-- "phrasal_verb": phrasal verbs (e.g., "pull off", "get over", "take on")
-- "idiom": multi-word idioms or set expressions (e.g., "easier said
-  than done", "on the same page", "a piece of cake")
-- "useful_word": single words that are uncommon but practical (e.g.,
-  "mitigate", "articulate", "seamless"). Do NOT include common words
-  like "good", "very", "make", "the".
-
-For each span, return:
-- "text": the exact text as it appears in one of the translations
-- "category": one of the three above
-- "version": which version it appears in ("casual" / "formal" / "idiomatic")
-
-If a span appears in multiple versions, list it once, picking the
-version where it's most prominent. Aim for 2-5 spans total — not
-every translation will have many. Quality over quantity.
-
-Output ONLY the JSON. No preamble, no explanation, no markdown fences.
+Output ONLY the JSON. No preamble or markdown fences.
 
 Schema:
 {
-  "source": "<original Chinese>",
   "casual": "...",
   "formal": "...",
   "idiomatic": "...",
   "idiomatic_note": null,
-  "spans": [
-    {
-      "text": "pull off",
-      "category": "phrasal_verb",
-      "version": "idiomatic"
-    }
-  ]
+  "spans": [{ "text": "pull off", "category": "phrasal_verb", "version": "idiomatic" }]
 }
 
-Chinese to translate: {TEXT}`
+Chinese text: {TEXT}`
 
 export function buildTranslatePrompt(text: string): string {
   return TRANSLATE_PROMPT.replace('{TEXT}', text)

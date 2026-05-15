@@ -7,7 +7,6 @@ import { buildLookupPrompt } from '../prompts/lookup'
 import { getWordFromFirestore, putWordToFirestore, pushHistoryItem } from '../db/firestore-sync'
 
 interface LLMWordResponse {
-  word: string
   phonetic_uk: string
   phonetic_us: string
   definitions: Definition[]
@@ -17,6 +16,7 @@ export async function lookupWord(
   rawInput: string,
   onProgress?: (status: 'loading' | 'done') => void,
   signal?: AbortSignal,
+  onStream?: () => void,
 ): Promise<WordCache> {
   const queried = rawInput.toLowerCase().trim()
   const lemma = lemmatize(queried)
@@ -39,11 +39,11 @@ export async function lookupWord(
       onProgress?.('loading')
       const model = await getModel('lookup')
       const prompt = buildLookupPrompt(lemma)
-      const llmData = await callLLMStream<LLMWordResponse>(prompt, model, signal)
+      const llmData = await callLLMStream<LLMWordResponse>(prompt, model, signal, onStream)
       onProgress?.('done')
 
       result = {
-        lemma: (llmData.word || lemma).toLowerCase().trim(),
+        lemma,
         queried_form: queried,
         phonetic_uk: llmData.phonetic_uk ?? '',
         phonetic_us: llmData.phonetic_us ?? '',
