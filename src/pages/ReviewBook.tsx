@@ -70,7 +70,7 @@ export default function ReviewBook() {
         height: 48, display: 'flex', alignItems: 'center',
         padding: '0 18px', flexShrink: 0,
       }}>
-        <span style={{ fontSize: 18, fontWeight: 500, color: 'var(--text-primary)', flex: 1 }}>
+        <span style={{ fontSize: 23, fontWeight: 500, color: 'var(--text-primary)', flex: 1 }}>
           Review
         </span>
       </div>
@@ -89,7 +89,7 @@ export default function ReviewBook() {
           <div style={{ fontSize: 36, fontWeight: 500, color: '#633806', lineHeight: 1 }}>
             {dueCount}
           </div>
-          <div style={{ fontSize: 12, color: '#854F0B', marginTop: 4 }}>due today</div>
+          <div style={{ fontSize: 16, color: '#854F0B', marginTop: 4 }}>due today</div>
           <button
             onClick={() => canStart && navigate('/review/session')}
             disabled={!canStart}
@@ -98,7 +98,7 @@ export default function ReviewBook() {
               background: canStart ? 'var(--amber-600)' : 'var(--bg-secondary)',
               color: canStart ? '#fff' : 'var(--text-secondary)',
               border: 'none', borderRadius: 8,
-              padding: '9px 22px', fontSize: 13, fontWeight: 500,
+              padding: '9px 22px', fontSize: 17, fontWeight: 500,
               cursor: canStart ? 'pointer' : 'default',
               fontFamily: 'inherit',
             }}
@@ -120,7 +120,7 @@ export default function ReviewBook() {
                   background: active ? '#412402' : 'var(--bg-secondary)',
                   color: active ? '#fff' : 'var(--text-secondary)',
                   border: 'none', borderRadius: 14,
-                  padding: '5px 14px', fontSize: 12,
+                  padding: '5px 14px', fontSize: 16,
                   cursor: 'pointer', fontFamily: 'inherit',
                 }}
               >
@@ -134,7 +134,7 @@ export default function ReviewBook() {
         {filtered.length === 0 && (
           <div style={{
             textAlign: 'center', marginTop: 32,
-            fontSize: 13, color: 'var(--text-tertiary)',
+            fontSize: 17, color: 'var(--text-tertiary)',
           }}>
             No {subTab === 'word' ? 'words' : 'sentences'} yet
           </div>
@@ -168,13 +168,13 @@ export default function ReviewBook() {
               {/* Left */}
               <div style={{ flex: 1, minWidth: 0, marginRight: 10 }}>
                 <div style={{
-                  fontSize: 14, color: 'var(--text-primary)',
+                  fontSize: 18, color: 'var(--text-primary)',
                   overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                 }}>
                   {label}
                 </div>
                 <div style={{
-                  fontSize: 11, marginTop: 2,
+                  fontSize: 14, marginTop: 2,
                   color: due === 'overdue' ? '#dc2626' : 'var(--text-tertiary)',
                 }}>
                   {due}
@@ -203,7 +203,7 @@ export default function ReviewBook() {
                   style={{
                     background: '#dc2626', color: '#fff',
                     border: 'none', borderRadius: 6,
-                    padding: '5px 14px', fontSize: 12,
+                    padding: '5px 14px', fontSize: 16,
                     cursor: 'pointer', fontFamily: 'inherit',
                     flexShrink: 0,
                   }}

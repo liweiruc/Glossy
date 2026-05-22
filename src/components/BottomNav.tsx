@@ -49,7 +49,7 @@ export default function BottomNav() {
             }}
           >
             <Icon size={20} color={color} />
-            <span style={{ fontSize: 10, color, lineHeight: 1 }}>{label}</span>
+            <span style={{ fontSize: 13, color, lineHeight: 1 }}>{label}</span>
           </button>
         )
       })}

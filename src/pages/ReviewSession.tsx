@@ -77,7 +77,7 @@ export default function ReviewSession() {
   if (phase === 'loading') {
     return (
       <div style={{ display: 'flex', height: '100dvh', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Loading…</span>
+        <span style={{ fontSize: 17, color: 'var(--text-tertiary)' }}>Loading…</span>
       </div>
     )
   }
@@ -96,10 +96,10 @@ export default function ReviewSession() {
         padding: '0 32px', textAlign: 'center',
       }}>
         <CheckCircle size={48} color="#22c55e" />
-        <div style={{ fontSize: 20, fontWeight: 500, color: 'var(--text-primary)', marginTop: 16, marginBottom: 12 }}>
+        <div style={{ fontSize: 26, fontWeight: 500, color: 'var(--text-primary)', marginTop: 16, marginBottom: 12 }}>
           Session complete
         </div>
-        <div style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 2 }}>
+        <div style={{ fontSize: 18, color: 'var(--text-secondary)', lineHeight: 2 }}>
           <div>Reviewed: {reviewed}</div>
           <div>Remembered: {remembered}</div>
           <div>Need more practice: {needPractice}</div>
@@ -110,7 +110,7 @@ export default function ReviewSession() {
             marginTop: 24,
             background: 'var(--amber-600)', color: '#fff',
             border: 'none', borderRadius: 8,
-            padding: '10px 24px', fontSize: 13, fontWeight: 500,
+            padding: '10px 24px', fontSize: 17, fontWeight: 500,
             cursor: 'pointer', fontFamily: 'inherit',
           }}
         >
@@ -133,7 +133,7 @@ export default function ReviewSession() {
       >
         <X size={20} color="var(--text-secondary)" />
       </button>
-      <span style={{ flex: 1, textAlign: 'center', fontSize: 11, color: 'var(--text-secondary)' }}>
+      <span style={{ flex: 1, textAlign: 'center', fontSize: 14, color: 'var(--text-secondary)' }}>
         {currentIndex + 1} / {queue.length}
       </span>
       <div style={{ width: 28 }} />
@@ -152,7 +152,7 @@ export default function ReviewSession() {
             animation: 'revealFade 0.2s ease',
           }}
         >
-          <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+          <div style={{ fontSize: 14, color: 'var(--text-tertiary)' }}>
             {wordSnap ? 'recall the meaning' : 'translate this sentence'}
           </div>
           <div style={{ flex: 1 }} />
@@ -165,13 +165,13 @@ export default function ReviewSession() {
             </div>
           ) : (
             <div style={{
-              fontSize: 18, color: 'var(--text-primary)',
+              fontSize: 23, color: 'var(--text-primary)',
               lineHeight: 1.6, maxWidth: 280, textAlign: 'center',
             }}>
               {sentenceSnap?.source_text}
             </div>
           )}
-          <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 14, marginBottom: 30 }}>
+          <div style={{ fontSize: 16, color: 'var(--text-tertiary)', marginTop: 14, marginBottom: 30 }}>
             tap to reveal
           </div>
           <button
@@ -180,7 +180,7 @@ export default function ReviewSession() {
               background: 'none',
               border: '0.5px solid var(--border-secondary)',
               borderRadius: 8, padding: '9px 22px',
-              fontSize: 13, color: 'var(--text-primary)',
+              fontSize: 17, color: 'var(--text-primary)',
               cursor: 'pointer', fontFamily: 'inherit',
             }}
           >
@@ -200,15 +200,15 @@ export default function ReviewSession() {
       <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 16 }}>
         {/* Question stays visible at top */}
         <div style={{ padding: '14px 18px 0' }}>
-          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 8 }}>
+          <div style={{ fontSize: 14, color: 'var(--text-tertiary)', marginBottom: 8 }}>
             {wordSnap ? 'recall the meaning' : 'translate this sentence'}
           </div>
           {wordSnap ? (
-            <div style={{ fontSize: 28, fontWeight: 500, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>
+            <div style={{ fontSize: 36, fontWeight: 500, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>
               {wordSnap.lemma}
             </div>
           ) : (
-            <div style={{ fontSize: 15, color: 'var(--text-primary)', lineHeight: 1.6 }}>
+            <div style={{ fontSize: 20, color: 'var(--text-primary)', lineHeight: 1.6 }}>
               {sentenceSnap?.source_text}
             </div>
           )}
@@ -224,10 +224,10 @@ export default function ReviewSession() {
               <div style={{ padding: '0 18px 10px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                   {wordSnap.phonetic_uk && (
-                    <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>UK {wordSnap.phonetic_uk}</span>
+                    <span style={{ fontSize: 16, color: 'var(--text-secondary)' }}>UK {wordSnap.phonetic_uk}</span>
                   )}
                   {wordSnap.phonetic_us && (
-                    <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>US {wordSnap.phonetic_us}</span>
+                    <span style={{ fontSize: 16, color: 'var(--text-secondary)' }}>US {wordSnap.phonetic_us}</span>
                   )}
                   <button
                     onClick={() => speak(wordSnap.lemma)}
@@ -248,16 +248,16 @@ export default function ReviewSession() {
                     }}
                   >
                     <span style={{
-                      fontSize: 10, fontStyle: 'italic',
+                      fontSize: 13, fontStyle: 'italic',
                       color: '#854F0B', background: '#FAEEDA',
                       borderRadius: 4, padding: '1px 7px',
                     }}>
                       {def.pos}
                     </span>
-                    <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.45, marginTop: 4 }}>
+                    <div style={{ fontSize: 17, color: 'var(--text-primary)', lineHeight: 1.45, marginTop: 4 }}>
                       {def.en}
                     </div>
-                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.45, marginBottom: 6 }}>
+                    <div style={{ fontSize: 17, color: 'var(--text-secondary)', lineHeight: 1.45, marginBottom: 6 }}>
                       {def.cn}
                     </div>
                     {def.examples.map((ex, j) => (
@@ -267,10 +267,10 @@ export default function ReviewSession() {
                           borderRadius: 1, flexShrink: 0, marginRight: 8,
                         }} />
                         <div>
-                          <div style={{ fontSize: 11, color: 'var(--text-primary)', lineHeight: 1.5, fontStyle: 'italic' }}>
+                          <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.5, fontStyle: 'italic' }}>
                             {ex.en}
                           </div>
-                          <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                          <div style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                             {ex.cn}
                           </div>
                         </div>
@@ -289,13 +289,13 @@ export default function ReviewSession() {
                 .map(v => (
                   <div key={v} style={{ marginBottom: 14 }}>
                     <div style={{
-                      fontSize: 11, color: '#854F0B',
+                      fontSize: 14, color: '#854F0B',
                       textTransform: 'uppercase', letterSpacing: '0.4px',
                       marginBottom: 5,
                     }}>
                       {v.charAt(0).toUpperCase() + v.slice(1)}
                     </div>
-                    <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.5 }}>
+                    <div style={{ fontSize: 18, color: 'var(--text-primary)', lineHeight: 1.5 }}>
                       {sentenceSnap[`${v}_en`]}
                     </div>
                   </div>
@@ -327,8 +327,8 @@ export default function ReviewSession() {
                   alignItems: 'center', gap: 2,
                 }}
               >
-                <span style={{ fontSize: 11, fontWeight: 500 }}>{label}</span>
-                <span style={{ fontSize: 10, opacity: 0.75 }}>{previewInterval(currentItem, key)}</span>
+                <span style={{ fontSize: 14, fontWeight: 500 }}>{label}</span>
+                <span style={{ fontSize: 13, opacity: 0.75 }}>{previewInterval(currentItem, key)}</span>
               </button>
             ))}
           </div>

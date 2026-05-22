@@ -178,7 +178,7 @@ export default function TranslateResult() {
         >
           <ChevronLeft size={20} color="var(--text-secondary)" />
         </button>
-        <span style={{ flex: 1, textAlign: 'center', fontSize: 14, color: 'var(--text-secondary)', fontWeight: 400 }}>
+        <span style={{ flex: 1, textAlign: 'center', fontSize: 18, color: 'var(--text-secondary)', fontWeight: 400 }}>
           Translate
         </span>
         <button
@@ -220,7 +220,7 @@ export default function TranslateResult() {
                 animation: 'pulse 1s ease-in-out infinite',
               }} />
             )}
-            <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
+            <span style={{ fontSize: 18, color: 'var(--text-secondary)' }}>
               {streaming ? 'AI 正在回复...' : '正在翻译...'}
             </span>
           </div>
@@ -232,13 +232,13 @@ export default function TranslateResult() {
             <div style={{
               background: 'var(--bg-secondary)', borderRadius: 10,
               padding: 12, marginBottom: 16,
-              fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.5,
+              fontSize: 18, color: 'var(--text-primary)', lineHeight: 1.5,
             }}>
               {data.source_text}
             </div>
 
             <div style={{
-              fontSize: 11, color: 'var(--text-tertiary)',
+              fontSize: 14, color: 'var(--text-tertiary)',
               textTransform: 'uppercase', letterSpacing: '0.5px',
               marginBottom: 10,
             }}>
@@ -259,7 +259,7 @@ export default function TranslateResult() {
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                     <span style={{
-                      fontSize: 11, textTransform: 'uppercase',
+                      fontSize: 14, textTransform: 'uppercase',
                       letterSpacing: '0.4px', color: 'var(--amber-700)',
                       fontWeight: 500,
                     }}>
@@ -276,12 +276,12 @@ export default function TranslateResult() {
                     </button>
                   </div>
 
-                  <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.5 }}>
+                  <div style={{ fontSize: 18, color: 'var(--text-primary)', lineHeight: 1.5 }}>
                     <ClickableText text={text} onWordClick={onWordClick} />
                   </div>
 
                   {version === 'idiomatic' && data.idiomatic_note && (
-                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 6 }}>
+                    <div style={{ fontSize: 14, color: 'var(--text-tertiary)', marginTop: 6 }}>
                       {data.idiomatic_note}
                     </div>
                   )}
@@ -308,7 +308,7 @@ export default function TranslateResult() {
               background: ctaDisabled ? 'var(--bg-secondary)' : 'var(--amber-600)',
               color: ctaDisabled ? 'var(--text-secondary)' : '#fff',
               border: 'none', borderRadius: 10, padding: '12px 0',
-              fontSize: 14, fontWeight: 500,
+              fontSize: 18, fontWeight: 500,
               cursor: ctaDisabled ? 'default' : 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
               fontFamily: 'inherit',

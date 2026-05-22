@@ -15,7 +15,7 @@ export default function ErrorBanner({ message, onClose, onRetry }: Props) {
       display: 'flex', alignItems: 'flex-start', gap: 8,
       flexShrink: 0,
     }}>
-      <span style={{ flex: 1, fontSize: 13, color: '#991B1B', lineHeight: 1.45 }}>
+      <span style={{ flex: 1, fontSize: 17, color: '#991B1B', lineHeight: 1.45 }}>
         {message}
       </span>
       {onRetry && (
@@ -23,7 +23,7 @@ export default function ErrorBanner({ message, onClose, onRetry }: Props) {
           onClick={onRetry}
           style={{
             background: 'none', border: 'none',
-            fontSize: 12, color: '#991B1B',
+            fontSize: 16, color: '#991B1B',
             cursor: 'pointer', fontFamily: 'inherit',
             textDecoration: 'underline', flexShrink: 0, padding: '1px 0',
           }}

@@ -114,14 +114,14 @@ export default function WordPopup({ word, onClose }: Props) {
 
         {/* Loading */}
         {loading && (
-          <div style={{ textAlign: 'center', padding: '20px 0', fontSize: 13, color: 'var(--text-tertiary)' }}>
+          <div style={{ textAlign: 'center', padding: '20px 0', fontSize: 17, color: 'var(--text-tertiary)' }}>
             Looking up…
           </div>
         )}
 
         {/* Error */}
         {!loading && error && (
-          <div style={{ textAlign: 'center', padding: '10px 0', fontSize: 13, color: 'var(--text-secondary)' }}>
+          <div style={{ textAlign: 'center', padding: '10px 0', fontSize: 17, color: 'var(--text-secondary)' }}>
             {error}
           </div>
         )}
@@ -132,11 +132,11 @@ export default function WordPopup({ word, onClose }: Props) {
             {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
-                <div style={{ fontSize: 22, fontWeight: 500, color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>
+                <div style={{ fontSize: 29, fontWeight: 500, color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>
                   {wordData.lemma}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                  <span style={{ fontSize: 16, color: 'var(--text-secondary)' }}>
                     {wordData.phonetic_us}
                   </span>
                   <button
@@ -177,7 +177,7 @@ export default function WordPopup({ word, onClose }: Props) {
                   background: isAdded ? 'var(--bg-secondary)' : 'var(--amber-600)',
                   color: isAdded ? 'var(--text-secondary)' : '#fff',
                   border: 'none', borderRadius: 8, padding: '9px 0',
-                  fontSize: 13, fontWeight: 500,
+                  fontSize: 17, fontWeight: 500,
                   cursor: isAdded ? 'default' : 'pointer',
                   fontFamily: 'inherit',
                 }}
@@ -191,7 +191,7 @@ export default function WordPopup({ word, onClose }: Props) {
                   background: 'none',
                   border: '0.5px solid var(--border-secondary)',
                   borderRadius: 8, padding: '9px 14px',
-                  fontSize: 12, color: 'var(--text-primary)',
+                  fontSize: 16, color: 'var(--text-primary)',
                   cursor: 'pointer', fontFamily: 'inherit',
                   flexShrink: 0,
                 }}
@@ -210,26 +210,26 @@ function MiniDef({ def, last }: { def: Definition; last: boolean }) {
   return (
     <div style={{ marginBottom: last ? 0 : 10 }}>
       <span style={{
-        fontSize: 10, fontStyle: 'italic',
+        fontSize: 13, fontStyle: 'italic',
         color: 'var(--amber-700)', background: 'var(--amber-50)',
         borderRadius: 4, padding: '1px 6px',
       }}>
         {def.pos}
       </span>
-      <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.4, marginTop: 3 }}>
+      <div style={{ fontSize: 17, color: 'var(--text-primary)', lineHeight: 1.4, marginTop: 3 }}>
         {def.en}
       </div>
-      <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+      <div style={{ fontSize: 17, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
         {def.cn}
       </div>
       {def.examples[0] && (
         <div style={{ display: 'flex', marginTop: 4 }}>
           <div style={{ width: 2, background: 'var(--border-tertiary)', borderRadius: 1, flexShrink: 0, marginRight: 6 }} />
           <div>
-            <div style={{ fontSize: 11, color: 'var(--text-primary)', lineHeight: 1.5, fontStyle: 'italic' }}>
+            <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.5, fontStyle: 'italic' }}>
               {def.examples[0].en}
             </div>
-            <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+            <div style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
               {def.examples[0].cn}
             </div>
           </div>

@@ -32,10 +32,10 @@ export default function Login() {
     }}>
       <div style={{ width: '100%', maxWidth: 360 }}>
         <div style={{ textAlign: 'center', marginBottom: 36 }}>
-          <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--amber-600)', letterSpacing: '-0.5px' }}>
+          <div style={{ fontSize: 36, fontWeight: 700, color: 'var(--amber-600)', letterSpacing: '-0.5px' }}>
             Glossy
           </div>
-          <div style={{ marginTop: 6, fontSize: 13, color: 'var(--text-secondary)' }}>
+          <div style={{ marginTop: 6, fontSize: 17, color: 'var(--text-secondary)' }}>
             登录继续
           </div>
         </div>
@@ -65,7 +65,7 @@ export default function Login() {
           />
 
           {error && (
-            <div style={{ fontSize: 12, color: '#dc2626', textAlign: 'center' }}>{error}</div>
+            <div style={{ fontSize: 16, color: '#dc2626', textAlign: 'center' }}>{error}</div>
           )}
 
           <button
@@ -77,7 +77,7 @@ export default function Login() {
           </button>
         </form>
 
-        <div style={{ marginTop: 20, textAlign: 'center', fontSize: 13, color: 'var(--text-secondary)' }}>
+        <div style={{ marginTop: 20, textAlign: 'center', fontSize: 17, color: 'var(--text-secondary)' }}>
           还没有账号？{' '}
           <Link to="/register" style={{ color: 'var(--amber-600)', textDecoration: 'none' }}>
             注册
@@ -95,7 +95,7 @@ const inputStyle: React.CSSProperties = {
   border: '0.5px solid var(--border-tertiary)',
   borderRadius: 10,
   padding: '12px 14px',
-  fontSize: 14,
+  fontSize: 18,
   color: 'var(--text-primary)',
   outline: 'none',
 }
@@ -108,7 +108,7 @@ function btnStyle(loading: boolean): React.CSSProperties {
     border: 'none',
     borderRadius: 10,
     padding: '13px 0',
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: 500,
     cursor: loading ? 'not-allowed' : 'pointer',
     marginTop: 4,

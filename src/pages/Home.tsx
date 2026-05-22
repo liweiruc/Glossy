@@ -80,7 +80,7 @@ export default function Home() {
       {/* AppBar */}
       <div style={{ height: 48, display: 'flex', alignItems: 'center', padding: '0 18px', flexShrink: 0 }}>
         <div style={{ flex: 1 }} />
-        <span style={{ fontSize: 18, fontWeight: 500, color: 'var(--text-primary)' }}>Glossy</span>
+        <span style={{ fontSize: 23, fontWeight: 500, color: 'var(--text-primary)' }}>Glossy</span>
         <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
           <button
             onClick={() => navigate('/settings')}
@@ -104,7 +104,7 @@ export default function Home() {
                 background: 'none',
                 border: 'none',
                 borderBottom: tab === t ? '2px solid var(--amber-600)' : '2px solid transparent',
-                fontSize: 14,
+                fontSize: 18,
                 fontWeight: tab === t ? 500 : 400,
                 color: tab === t ? 'var(--text-primary)' : 'var(--text-secondary)',
                 cursor: 'pointer',
@@ -133,7 +133,7 @@ export default function Home() {
               placeholder="Type an English word"
               style={{
                 flex: 1, border: 'none', background: 'transparent',
-                fontSize: 16, color: 'var(--text-primary)', outline: 'none',
+                fontSize: 21, color: 'var(--text-primary)', outline: 'none',
                 fontFamily: 'inherit',
               }}
             />
@@ -167,7 +167,7 @@ export default function Home() {
               rows={3}
               style={{
                 width: '100%', border: 'none', background: 'transparent',
-                fontSize: 16, color: 'var(--text-primary)', outline: 'none',
+                fontSize: 21, color: 'var(--text-primary)', outline: 'none',
                 fontFamily: 'inherit', resize: 'none', boxSizing: 'border-box',
                 lineHeight: 1.5,
               }}
@@ -180,7 +180,7 @@ export default function Home() {
                   display: 'flex', alignItems: 'center', gap: 4,
                   background: canTranslate ? 'var(--amber-600)' : 'var(--border-tertiary)',
                   color: '#fff', border: 'none', borderRadius: 6,
-                  padding: '5px 10px', fontSize: 12, cursor: canTranslate ? 'pointer' : 'default',
+                  padding: '5px 10px', fontSize: 16, cursor: canTranslate ? 'pointer' : 'default',
                   fontFamily: 'inherit',
                 }}
               >
@@ -195,7 +195,7 @@ export default function Home() {
         {recent.length > 0 && (
           <section>
             <div style={{
-              fontSize: 11, color: 'var(--text-tertiary)',
+              fontSize: 14, color: 'var(--text-tertiary)',
               textTransform: 'uppercase', letterSpacing: '0.5px',
               marginBottom: 6,
             }}>
@@ -213,13 +213,13 @@ export default function Home() {
                 }}
               >
                 <span style={{
-                  fontSize: 14, color: 'var(--text-primary)',
+                  fontSize: 18, color: 'var(--text-primary)',
                   overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                   maxWidth: '72%',
                 }}>
                   {item.display_text}
                 </span>
-                <span style={{ fontSize: 11, color: 'var(--text-tertiary)', flexShrink: 0 }}>
+                <span style={{ fontSize: 14, color: 'var(--text-tertiary)', flexShrink: 0 }}>
                   {relativeTime(item.queried_at)}
                 </span>
               </div>

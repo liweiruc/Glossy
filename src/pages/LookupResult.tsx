@@ -121,7 +121,7 @@ export default function LookupResult() {
         >
           <ChevronLeft size={20} color="var(--text-secondary)" />
         </button>
-        <span style={{ flex: 1, textAlign: 'center', fontSize: 14, color: 'var(--text-secondary)', fontWeight: 400 }}>
+        <span style={{ flex: 1, textAlign: 'center', fontSize: 18, color: 'var(--text-secondary)', fontWeight: 400 }}>
           Lookup
         </span>
         <button style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' }}>
@@ -152,7 +152,7 @@ export default function LookupResult() {
                 animation: 'pulse 1s ease-in-out infinite',
               }} />
             )}
-            <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
+            <span style={{ fontSize: 18, color: 'var(--text-secondary)' }}>
               {streaming ? 'AI 正在回复...' : `正在查询 ${lemma}...`}
             </span>
           </div>
@@ -162,7 +162,7 @@ export default function LookupResult() {
           <>
             {/* WordHeader */}
             <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 30, fontWeight: 500, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>
+              <div style={{ fontSize: 39, fontWeight: 500, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>
                 {wordData.lemma}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
@@ -178,7 +178,7 @@ export default function LookupResult() {
                 background: 'var(--bg-secondary)', borderRadius: 6,
                 padding: '6px 10px', marginBottom: 14,
               }}>
-                <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                <span style={{ fontSize: 14, color: 'var(--text-tertiary)' }}>
                   '{queriedForm}' is a form of '{lemma}'
                 </span>
               </div>
@@ -204,7 +204,7 @@ export default function LookupResult() {
                   display: 'block', width: '100%',
                   marginTop: 12, padding: '8px 0',
                   background: 'none', border: 'none',
-                  fontSize: 12, color: 'var(--amber-600)',
+                  fontSize: 16, color: 'var(--amber-600)',
                   cursor: 'pointer', textAlign: 'center',
                   fontFamily: 'inherit',
                 }}
@@ -233,7 +233,7 @@ export default function LookupResult() {
               color: isAdded ? 'var(--text-secondary)' : '#fff',
               border: 'none', borderRadius: 10,
               padding: '12px 0',
-              fontSize: 14, fontWeight: 500,
+              fontSize: 18, fontWeight: 500,
               cursor: isAdded ? 'default' : 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
               fontFamily: 'inherit',
@@ -266,7 +266,7 @@ function PhoneticItem({ label, phonetic, word, lang }: {
   }
 
   return (
-    <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'var(--text-secondary)' }}>
+    <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 17, color: 'var(--text-secondary)' }}>
       {label} {phonetic}
       <button
         onClick={speak}
@@ -283,27 +283,27 @@ function DefinitionBlock({ def, onWordClick }: { def: Definition; onWordClick: (
     <div style={{ paddingBottom: 4 }}>
       <span style={{
         display: 'inline-block',
-        fontSize: 11, fontStyle: 'italic',
+        fontSize: 14, fontStyle: 'italic',
         color: 'var(--amber-700)',
         background: 'var(--amber-50)',
         borderRadius: 4, padding: '1px 7px',
       }}>
         {def.pos}
       </span>
-      <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.45, marginTop: 4 }}>
+      <div style={{ fontSize: 17, color: 'var(--text-primary)', lineHeight: 1.45, marginTop: 4 }}>
         <ClickableText text={def.en} onWordClick={onWordClick} />
       </div>
-      <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.45, marginBottom: 6 }}>
+      <div style={{ fontSize: 17, color: 'var(--text-secondary)', lineHeight: 1.45, marginBottom: 6 }}>
         <ClickableText text={def.cn} onWordClick={onWordClick} />
       </div>
       {def.examples.map((ex, i) => (
         <div key={i} style={{ display: 'flex', marginBottom: 6 }}>
           <div style={{ width: 2, background: 'var(--border-tertiary)', borderRadius: 1, flexShrink: 0, marginRight: 8 }} />
           <div>
-            <div style={{ fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.5, fontStyle: 'italic' }}>
+            <div style={{ fontSize: 16, color: 'var(--text-primary)', lineHeight: 1.5, fontStyle: 'italic' }}>
               <ClickableText text={ex.en} onWordClick={onWordClick} />
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+            <div style={{ fontSize: 16, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
               <ClickableText text={ex.cn} onWordClick={onWordClick} />
             </div>
           </div>

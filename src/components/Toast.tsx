@@ -47,7 +47,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             color: '#ffffff',
             borderRadius: 8,
             padding: '10px 16px',
-            fontSize: 13,
+            fontSize: 17,
             lineHeight: 1.4,
             maxWidth: 300,
             textAlign: 'center',

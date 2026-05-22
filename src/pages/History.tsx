@@ -135,7 +135,7 @@ export default function History() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh' }}>
       {/* AppBar */}
       <div style={{ height: 48, display: 'flex', alignItems: 'center', padding: '0 18px', flexShrink: 0 }}>
-        <span style={{ fontSize: 18, fontWeight: 500, color: 'var(--text-primary)' }}>
+        <span style={{ fontSize: 23, fontWeight: 500, color: 'var(--text-primary)' }}>
           History
         </span>
       </div>
@@ -151,7 +151,7 @@ export default function History() {
             marginTop: 80, gap: 12,
           }}>
             <Clock size={40} color="var(--text-tertiary)" />
-            <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>还没有查询记录</div>
+            <div style={{ fontSize: 18, color: 'var(--text-secondary)' }}>还没有查询记录</div>
           </div>
         )}
 
@@ -159,7 +159,7 @@ export default function History() {
         {[...groups.entries()].map(([label, dayItems]) => (
           <div key={label}>
             <div style={{
-              fontSize: 11, color: 'var(--text-tertiary)',
+              fontSize: 14, color: 'var(--text-tertiary)',
               padding: '10px 2px 4px',
             }}>
               {label}
@@ -187,7 +187,7 @@ export default function History() {
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     background: item.type === 'word' ? 'var(--bg-secondary)' : '#FAEEDA',
                     color: item.type === 'word' ? 'var(--text-secondary)' : '#854F0B',
-                    fontSize: 14, fontWeight: 500,
+                    fontSize: 18, fontWeight: 500,
                   }}>
                     {item.type === 'word' ? 'W' : 'T'}
                   </div>
@@ -195,19 +195,19 @@ export default function History() {
                   {/* Middle */}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{
-                      fontSize: 13, color: 'var(--text-primary)',
+                      fontSize: 17, color: 'var(--text-primary)',
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                     }}>
                       {item.display_text}
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 1 }}>
+                    <div style={{ fontSize: 14, color: 'var(--text-tertiary)', marginTop: 1 }}>
                       {subTime(item.queried_at)}
                     </div>
                   </div>
 
                   {/* Right */}
                   {isAdded ? (
-                    <span style={{ fontSize: 11, color: 'var(--text-tertiary)', flexShrink: 0 }}>
+                    <span style={{ fontSize: 14, color: 'var(--text-tertiary)', flexShrink: 0 }}>
                       added
                     </span>
                   ) : (
@@ -216,7 +216,7 @@ export default function History() {
                       disabled={isPending}
                       style={{
                         background: 'none', border: 'none', padding: 0,
-                        fontSize: 11,
+                        fontSize: 14,
                         color: isPending ? 'var(--text-tertiary)' : 'var(--amber-600)',
                         cursor: isPending ? 'default' : 'pointer',
                         flexShrink: 0, fontFamily: 'inherit',

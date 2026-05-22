@@ -25,7 +25,7 @@ export default function Settings() {
         >
           <ChevronLeft size={20} color="var(--text-secondary)" />
         </button>
-        <span style={{ flex: 1, textAlign: 'center', fontSize: 14, color: 'var(--text-secondary)', fontWeight: 400 }}>
+        <span style={{ flex: 1, textAlign: 'center', fontSize: 18, color: 'var(--text-secondary)', fontWeight: 400 }}>
           Settings
         </span>
         <div style={{ width: 28 }} />
@@ -34,7 +34,7 @@ export default function Settings() {
       {/* Body */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '24px 18px' }}>
         <div style={{
-          fontSize: 11, color: 'var(--text-tertiary)',
+          fontSize: 14, color: 'var(--text-tertiary)',
           textTransform: 'uppercase', letterSpacing: '0.5px',
           fontWeight: 500, marginBottom: 12,
         }}>
@@ -48,7 +48,7 @@ export default function Settings() {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <User size={16} color="var(--text-secondary)" />
-            <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>
+            <span style={{ fontSize: 17, color: 'var(--text-primary)' }}>
               {user?.email ?? ''}
             </span>
           </div>
@@ -57,7 +57,7 @@ export default function Settings() {
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: 4,
-              fontSize: 13, color: 'var(--text-secondary)', padding: '4px 0',
+              fontSize: 17, color: 'var(--text-secondary)', padding: '4px 0',
             }}
           >
             <LogOut size={14} />
