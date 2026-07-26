@@ -7,6 +7,7 @@ import {
   updateReviewItemInFirestore,
   pushReviewLog,
   deleteReviewItemFromFirestore,
+  deleteHistoryItemFromFirestore,
 } from './firestore-sync'
 
 function uid(): string | null {
@@ -55,6 +56,14 @@ export async function deleteReviewItem(id: string): Promise<void> {
   await db.review_items.delete(id)
   const u = uid()
   if (u) deleteReviewItemFromFirestore(u, id).catch(e => console.error('[Firestore sync]', e))
+}
+
+// Removes the history row and nothing else: the cached lookup (shared with all
+// users) and any review_item built from it both survive.
+export async function deleteHistoryItem(id: string): Promise<void> {
+  await db.history.delete(id)
+  const u = uid()
+  if (u) deleteHistoryItemFromFirestore(u, id).catch(e => console.error('[Firestore sync]', e))
 }
 
 export async function getHistory(): Promise<HistoryItem[]> {

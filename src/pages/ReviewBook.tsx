@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db'
@@ -8,6 +8,7 @@ import { dueLabel } from '../utils/time'
 import { hashText } from '../utils/hash'
 import { useToast } from '../components/Toast'
 import BottomNav from '../components/BottomNav'
+import SwipeToDelete from '../components/SwipeToDelete'
 
 type SubTab = 'word' | 'sentence'
 
@@ -15,8 +16,7 @@ export default function ReviewBook() {
   const navigate = useNavigate()
   const { showToast } = useToast()
   const [subTab, setSubTab] = useState<SubTab>('word')
-  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
-  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [openId, setOpenId] = useState<string | null>(null)
 
   const items = useLiveQuery(
     () => db.review_items.orderBy('added_at').reverse().toArray(),
@@ -26,28 +26,11 @@ export default function ReviewBook() {
 
   async function handleDelete(id: string) {
     await deleteReviewItem(id)
-    setPendingDeleteId(null)
+    setOpenId(null)
     showToast('已从复习本移除')
   }
 
-  function startPress(id: string) {
-    if (pressTimer.current) clearTimeout(pressTimer.current)
-    pressTimer.current = setTimeout(() => setPendingDeleteId(id), 600)
-  }
-
-  function cancelPress() {
-    if (pressTimer.current) {
-      clearTimeout(pressTimer.current)
-      pressTimer.current = null
-    }
-  }
-
-  async function handleRowClick(e: React.MouseEvent, item: ReviewItem) {
-    if (pendingDeleteId === item.id) {
-      e.stopPropagation()
-      return
-    }
-    setPendingDeleteId(null)
+  async function handleRowClick(item: ReviewItem) {
     if (item.type === 'word') {
       const lemma = (item.snapshot as WordSnapshot).lemma
       navigate('/lookup/' + lemma)
@@ -78,7 +61,7 @@ export default function ReviewBook() {
       {/* Body */}
       <div
         style={{ flex: 1, overflowY: 'auto', padding: '0 18px', paddingBottom: 'calc(72px + env(safe-area-inset-bottom))' }}
-        onClick={() => setPendingDeleteId(null)}
+        onClick={() => setOpenId(null)}
       >
         {/* DueCard */}
         <div style={{
@@ -141,7 +124,6 @@ export default function ReviewBook() {
         )}
         {filtered.map((item, i) => {
           const isLast = i === filtered.length - 1
-          const isPending = pendingDeleteId === item.id
           const label = item.type === 'word'
             ? (item.snapshot as WordSnapshot).lemma
             : (item.snapshot as SentenceSnapshot).source_text
@@ -149,40 +131,40 @@ export default function ReviewBook() {
           const due = dueLabel(item.due_at)
 
           return (
-            <div
+            <SwipeToDelete
               key={item.id}
-              style={{
-                display: 'flex', alignItems: 'center',
-                padding: '10px 2px',
-                borderBottom: isLast ? 'none' : '0.5px solid var(--border-tertiary)',
-                WebkitTouchCallout: 'none',
-                userSelect: 'none',
-              }}
-              onMouseDown={() => startPress(item.id)}
-              onMouseUp={cancelPress}
-              onMouseLeave={cancelPress}
-              onTouchStart={e => { e.stopPropagation(); startPress(item.id) }}
-              onTouchEnd={cancelPress}
-              onClick={e => handleRowClick(e, item)}
+              open={openId === item.id}
+              onOpenChange={o => setOpenId(o ? item.id : null)}
+              onDelete={() => handleDelete(item.id)}
             >
-              {/* Left */}
-              <div style={{ flex: 1, minWidth: 0, marginRight: 10 }}>
-                <div style={{
-                  fontSize: 18, color: 'var(--text-primary)',
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>
-                  {label}
+              <div
+                style={{
+                  display: 'flex', alignItems: 'center',
+                  padding: '10px 2px',
+                  borderBottom: isLast ? 'none' : '0.5px solid var(--border-tertiary)',
+                  cursor: 'pointer',
+                  WebkitTouchCallout: 'none',
+                  userSelect: 'none',
+                }}
+                onClick={() => handleRowClick(item)}
+              >
+                {/* Left */}
+                <div style={{ flex: 1, minWidth: 0, marginRight: 10 }}>
+                  <div style={{
+                    fontSize: 18, color: 'var(--text-primary)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
+                    {label}
+                  </div>
+                  <div style={{
+                    fontSize: 14, marginTop: 2,
+                    color: due === 'overdue' ? '#dc2626' : 'var(--text-tertiary)',
+                  }}>
+                    {due}
+                  </div>
                 </div>
-                <div style={{
-                  fontSize: 14, marginTop: 2,
-                  color: due === 'overdue' ? '#dc2626' : 'var(--text-tertiary)',
-                }}>
-                  {due}
-                </div>
-              </div>
 
-              {/* Mastery dots */}
-              {!isPending && (
+                {/* Mastery dots */}
                 <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
                   {Array.from({ length: 5 }).map((_, di) => (
                     <div
@@ -194,24 +176,8 @@ export default function ReviewBook() {
                     />
                   ))}
                 </div>
-              )}
-
-              {/* Delete button (long-press) */}
-              {isPending && (
-                <button
-                  onClick={e => { e.stopPropagation(); handleDelete(item.id) }}
-                  style={{
-                    background: '#dc2626', color: '#fff',
-                    border: 'none', borderRadius: 6,
-                    padding: '5px 14px', fontSize: 16,
-                    cursor: 'pointer', fontFamily: 'inherit',
-                    flexShrink: 0,
-                  }}
-                >
-                  Delete
-                </button>
-              )}
-            </div>
+              </div>
+            </SwipeToDelete>
           )
         })}
       </div>

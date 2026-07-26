@@ -4,14 +4,19 @@ import { Search, Settings as SettingsIcon, SendHorizontal } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db'
 import type { HistoryItem } from '../db'
+import { deleteHistoryItem } from '../db/queries'
 import { lemmatize } from '../utils/lemmatize'
 import { hashText } from '../utils/hash'
+import { useToast } from '../components/Toast'
 import BottomNav from '../components/BottomNav'
+import SwipeToDelete from '../components/SwipeToDelete'
 import { relativeTime } from '../utils/time'
 
 export default function Home() {
   const navigate = useNavigate()
+  const { showToast } = useToast()
   const [tab, setTab] = useState<'lookup' | 'translate'>('lookup')
+  const [openId, setOpenId] = useState<string | null>(null)
   const [lookupQuery, setLookupQuery] = useState('')
   const [translateQuery, setTranslateQuery] = useState('')
   const [hashing, setHashing] = useState(false)
@@ -62,6 +67,12 @@ export default function Home() {
     else navigate('/translate/' + item.ref_key)
   }
 
+  async function handleDelete(id: string) {
+    await deleteHistoryItem(id)
+    setOpenId(null)
+    showToast('已从记录中删除')
+  }
+
   const canLookup = !!lookupQuery.trim()
   const canTranslate = !hashing && !!translateQuery.trim()
 
@@ -92,7 +103,10 @@ export default function Home() {
       </div>
 
       {/* Body */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '0 18px', paddingBottom: 'calc(72px + env(safe-area-inset-bottom))' }}>
+      <div
+        style={{ flex: 1, overflowY: 'auto', padding: '0 18px', paddingBottom: 'calc(72px + env(safe-area-inset-bottom))' }}
+        onClick={() => setOpenId(null)}
+      >
         {/* TabBar */}
         <div style={{ display: 'flex', borderBottom: '0.5px solid var(--border-tertiary)', marginBottom: 14 }}>
           {(['lookup', 'translate'] as const).map(t => (
@@ -202,27 +216,33 @@ export default function Home() {
               Recent
             </div>
             {recent.map((item, i) => (
-              <div
+              <SwipeToDelete
                 key={item.id}
-                onClick={() => handleItemClick(item)}
-                style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  padding: '10px 0',
-                  borderBottom: i < recent.length - 1 ? '0.5px solid var(--border-tertiary)' : 'none',
-                  cursor: 'pointer',
-                }}
+                open={openId === item.id}
+                onOpenChange={o => setOpenId(o ? item.id : null)}
+                onDelete={() => handleDelete(item.id)}
               >
-                <span style={{
-                  fontSize: 18, color: 'var(--text-primary)',
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  maxWidth: '72%',
-                }}>
-                  {item.display_text}
-                </span>
-                <span style={{ fontSize: 14, color: 'var(--text-tertiary)', flexShrink: 0 }}>
-                  {relativeTime(item.queried_at)}
-                </span>
-              </div>
+                <div
+                  onClick={() => handleItemClick(item)}
+                  style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '10px 0',
+                    borderBottom: i < recent.length - 1 ? '0.5px solid var(--border-tertiary)' : 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <span style={{
+                    fontSize: 18, color: 'var(--text-primary)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    maxWidth: '72%',
+                  }}>
+                    {item.display_text}
+                  </span>
+                  <span style={{ fontSize: 14, color: 'var(--text-tertiary)', flexShrink: 0 }}>
+                    {relativeTime(item.queried_at)}
+                  </span>
+                </div>
+              </SwipeToDelete>
             ))}
           </section>
         )}

@@ -3,6 +3,7 @@ import {
   onSnapshot,
   type WriteBatch, type Unsubscribe,
 } from 'firebase/firestore'
+import type { Table } from 'dexie'
 import { firestore } from '../firebase'
 import { db } from './index'
 import type { WordCache, TranslationCache, HistoryItem, ReviewItem, ReviewLog } from './index'
@@ -62,6 +63,14 @@ export async function deleteReviewItemFromFirestore(uid: string, id: string): Pr
   await deleteDoc(doc(userCol(uid, 'review_items'), id))
 }
 
+// Deletes the history record only. Never touches word_cache/translation_cache —
+// those are shared across every user (see firestore.rules), so cascading a delete
+// there would wipe another user's cached lookup.
+export async function deleteHistoryItemFromFirestore(uid: string, id: string): Promise<void> {
+  console.log('[sync] delete history', id)
+  await deleteDoc(doc(userCol(uid, 'history'), id))
+}
+
 // Server-roundtrip health check. setDoc+persistentLocalCache resolves on local write
 // and silently swallows server rejections — this explicit getDocs hits the server and
 // will throw "permission-denied" if the rules aren't deployed.
@@ -80,10 +89,28 @@ export async function verifyFirestoreAccess(uid: string): Promise<boolean> {
   }
 }
 
-// Push only items that are missing from the remote — non-destructive.
-// The previous version used setDoc on every local item, which clobbered newer
-// remote state with stale local copies whenever Device B logged in.
+// Marks that this device has completed its one-time upload of pre-existing local
+// data for this user. Stored in IndexedDB (not localStorage) so it can never be
+// cleared independently of the data it guards.
+const bootstrapKey = (uid: string) => `bootstrapped:${uid}`
+
+async function isBootstrapped(uid: string): Promise<boolean> {
+  return !!(await db.settings.get(bootstrapKey(uid)))
+}
+
+// One-time migration of data created before this device logged in. NOT the offline
+// mechanism — persistentLocalCache already queues and retries writes from
+// pushHistoryItem/pushReviewItem, so ongoing sync does not depend on this.
+//
+// It runs only once per device+user: re-running it would resurrect items deleted on
+// another device, because a local row absent from the remote is indistinguishable
+// from a row that was never uploaded.
 export async function pushLocalOnlyItems(uid: string): Promise<void> {
+  if (await isBootstrapped(uid)) {
+    console.log('[sync] device already bootstrapped — skipping local-only push')
+    return
+  }
+
   const [remoteHistory, remoteItems, remoteLogs, localHistory, localItems, localLogs] =
     await Promise.all([
       getDocs(userCol(uid, 'history')),
@@ -115,91 +142,90 @@ export async function pushLocalOnlyItems(uid: string): Promise<void> {
     ...newLogs.map(l => (b: WriteBatch) => { b.set(doc(userCol(uid, 'review_logs'), l.id), l) }),
   ]
 
-  if (ops.length === 0) return
-
   const CHUNK = 400
   for (let i = 0; i < ops.length; i += CHUNK) {
     const b = writeBatch(firestore)
     ops.slice(i, i + CHUNK).forEach(op => op(b))
     await b.commit()
   }
+
+  // Only after every batch has been acknowledged — a throw above leaves the device
+  // un-bootstrapped so the upload is retried on the next login.
+  await db.settings.put({ key: bootstrapKey(uid), value: String(Date.now()) })
+}
+
+// Mirrors one Firestore user collection into its local Dexie table.
+function subscribeCollection<T extends { id: string }>(
+  uid: string,
+  name: string,
+  table: Table<T, string>,
+): Unsubscribe {
+  const onError = (e: unknown) => console.error(`[sync ${name}]`, e)
+  let reconciled = false
+
+  return onSnapshot(
+    userCol(uid, name),
+    snap => {
+      const puts: T[] = []
+      const deletes: string[] = []
+      for (const change of snap.docChanges()) {
+        if (change.type === 'removed') deletes.push(change.doc.id)
+        else puts.push(change.doc.data() as T)
+      }
+
+      const apply = async () => {
+        // On the first server-authoritative snapshot of the session the remote set is
+        // the truth, so drop local rows missing from it. Without this, an item deleted
+        // on another device while this one was closed would linger forever: a fresh
+        // listener reports only what currently exists, so no 'removed' change ever
+        // fires for it.
+        //
+        // Both guards are load-bearing:
+        //  - fromCache — an offline snapshot is served from Firestore's local cache
+        //    and must never be mistaken for an empty remote.
+        //  - isBootstrapped — before the one-time upload finishes, local rows are
+        //    pending upload rather than remotely deleted; reconciling then would
+        //    destroy exactly the data pushLocalOnlyItems is about to send.
+        if (!reconciled && !snap.metadata.fromCache && await isBootstrapped(uid)) {
+          reconciled = true
+          const remoteIds = new Set(snap.docs.map(d => d.id))
+          const stale = (await table.toCollection().primaryKeys())
+            .filter(id => !remoteIds.has(id))
+          if (stale.length) {
+            console.log(`[sync ${name}] reconcile — dropping ${stale.length} local rows absent from server`)
+            deletes.push(...stale)
+          }
+        }
+
+        console.log(
+          `[sync ${name}] fromCache=${snap.metadata.fromCache} pending=${snap.metadata.hasPendingWrites}`,
+          `+${puts.length} -${deletes.length}`,
+        )
+
+        if (puts.length) await table.bulkPut(puts)
+        if (deletes.length) await table.bulkDelete(deletes)
+      }
+
+      apply().catch(onError)
+    },
+    onError,
+  )
 }
 
 // Real-time subscription. First snapshot delivers current state; subsequent fires
 // are server-pushed deltas. Logs metadata so cross-device sync issues are visible
 // in the browser console (fromCache=true means we're not connected to the server).
 export function subscribeToUserData(uid: string): Unsubscribe {
-  const onError = (e: unknown) => console.error('[sync listener]', e)
-
   console.log('[sync] subscribing for user', uid)
 
-  const unsubHistory = onSnapshot(
-    userCol(uid, 'history'),
-    snap => {
-      const puts: HistoryItem[] = []
-      const deletes: string[] = []
-      for (const change of snap.docChanges()) {
-        if (change.type === 'removed') deletes.push(change.doc.id)
-        else puts.push(change.doc.data() as HistoryItem)
-      }
-      console.log(
-        `[sync history] fromCache=${snap.metadata.fromCache} pending=${snap.metadata.hasPendingWrites}`,
-        `+${puts.length} -${deletes.length}`,
-      )
-      Promise.all([
-        puts.length ? db.history.bulkPut(puts) : Promise.resolve(),
-        deletes.length ? db.history.bulkDelete(deletes) : Promise.resolve(),
-      ]).catch(onError)
-    },
-    onError,
-  )
-
-  const unsubItems = onSnapshot(
-    userCol(uid, 'review_items'),
-    snap => {
-      const puts: ReviewItem[] = []
-      const deletes: string[] = []
-      for (const change of snap.docChanges()) {
-        if (change.type === 'removed') deletes.push(change.doc.id)
-        else puts.push(change.doc.data() as ReviewItem)
-      }
-      console.log(
-        `[sync review_items] fromCache=${snap.metadata.fromCache} pending=${snap.metadata.hasPendingWrites}`,
-        `+${puts.length} -${deletes.length}`,
-      )
-      Promise.all([
-        puts.length ? db.review_items.bulkPut(puts) : Promise.resolve(),
-        deletes.length ? db.review_items.bulkDelete(deletes) : Promise.resolve(),
-      ]).catch(onError)
-    },
-    onError,
-  )
-
-  const unsubLogs = onSnapshot(
-    userCol(uid, 'review_logs'),
-    snap => {
-      const puts: ReviewLog[] = []
-      const deletes: string[] = []
-      for (const change of snap.docChanges()) {
-        if (change.type === 'removed') deletes.push(change.doc.id)
-        else puts.push(change.doc.data() as ReviewLog)
-      }
-      console.log(
-        `[sync review_logs] fromCache=${snap.metadata.fromCache} pending=${snap.metadata.hasPendingWrites}`,
-        `+${puts.length} -${deletes.length}`,
-      )
-      Promise.all([
-        puts.length ? db.review_logs.bulkPut(puts) : Promise.resolve(),
-        deletes.length ? db.review_logs.bulkDelete(deletes) : Promise.resolve(),
-      ]).catch(onError)
-    },
-    onError,
-  )
+  const unsubs = [
+    subscribeCollection<HistoryItem>(uid, 'history', db.history),
+    subscribeCollection<ReviewItem>(uid, 'review_items', db.review_items),
+    subscribeCollection<ReviewLog>(uid, 'review_logs', db.review_logs),
+  ]
 
   return () => {
     console.log('[sync] unsubscribing for user', uid)
-    unsubHistory()
-    unsubItems()
-    unsubLogs()
+    unsubs.forEach(u => u())
   }
 }

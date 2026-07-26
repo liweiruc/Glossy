@@ -4,10 +4,11 @@ import { Clock } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db'
 import type { HistoryItem, WordSnapshot, SentenceSnapshot } from '../db'
-import { addReviewItem } from '../db/queries'
+import { addReviewItem, deleteHistoryItem } from '../db/queries'
 import { dayLabel } from '../utils/time'
 import { useToast } from '../components/Toast'
 import BottomNav from '../components/BottomNav'
+import SwipeToDelete from '../components/SwipeToDelete'
 
 function subTime(ts: number): string {
   const diff = Date.now() - ts
@@ -25,6 +26,7 @@ export default function History() {
   const navigate = useNavigate()
   const { showToast } = useToast()
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
+  const [openId, setOpenId] = useState<string | null>(null)
 
   const data = useLiveQuery(async () => {
     const [histItems, reviewItems] = await Promise.all([
@@ -123,6 +125,12 @@ export default function History() {
     }
   }
 
+  async function handleDelete(id: string) {
+    await deleteHistoryItem(id)
+    setOpenId(null)
+    showToast('已从记录中删除')
+  }
+
   // Group items by calendar day, preserving newest-first order
   const groups = new Map<string, HistoryItem[]>()
   for (const item of items) {
@@ -141,7 +149,10 @@ export default function History() {
       </div>
 
       {/* Body */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '0 18px', paddingBottom: 'calc(72px + env(safe-area-inset-bottom))' }}>
+      <div
+        style={{ flex: 1, overflowY: 'auto', padding: '0 18px', paddingBottom: 'calc(72px + env(safe-area-inset-bottom))' }}
+        onClick={() => setOpenId(null)}
+      >
 
         {/* Empty state */}
         {items.length === 0 && (
@@ -171,61 +182,67 @@ export default function History() {
               const isPending = pendingIds.has(item.id)
 
               return (
-                <div
+                <SwipeToDelete
                   key={item.id}
-                  onClick={() => navigate(item.type === 'word' ? `/lookup/${item.ref_key}` : `/translate/${item.ref_key}`)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '10px 2px',
-                    borderBottom: isLast ? 'none' : '0.5px solid var(--border-tertiary)',
-                    cursor: 'pointer',
-                  }}
+                  open={openId === item.id}
+                  onOpenChange={o => setOpenId(o ? item.id : null)}
+                  onDelete={() => handleDelete(item.id)}
                 >
-                  {/* TypeBadge */}
-                  <div style={{
-                    width: 28, height: 28, borderRadius: 6, flexShrink: 0,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: item.type === 'word' ? 'var(--bg-secondary)' : '#FAEEDA',
-                    color: item.type === 'word' ? 'var(--text-secondary)' : '#854F0B',
-                    fontSize: 18, fontWeight: 500,
-                  }}>
-                    {item.type === 'word' ? 'W' : 'T'}
-                  </div>
-
-                  {/* Middle */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    onClick={() => navigate(item.type === 'word' ? `/lookup/${item.ref_key}` : `/translate/${item.ref_key}`)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '10px 2px',
+                      borderBottom: isLast ? 'none' : '0.5px solid var(--border-tertiary)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {/* TypeBadge */}
                     <div style={{
-                      fontSize: 17, color: 'var(--text-primary)',
-                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      width: 28, height: 28, borderRadius: 6, flexShrink: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      background: item.type === 'word' ? 'var(--bg-secondary)' : '#FAEEDA',
+                      color: item.type === 'word' ? 'var(--text-secondary)' : '#854F0B',
+                      fontSize: 18, fontWeight: 500,
                     }}>
-                      {item.display_text}
+                      {item.type === 'word' ? 'W' : 'T'}
                     </div>
-                    <div style={{ fontSize: 14, color: 'var(--text-tertiary)', marginTop: 1 }}>
-                      {subTime(item.queried_at)}
-                    </div>
-                  </div>
 
-                  {/* Right */}
-                  {isAdded ? (
-                    <span style={{ fontSize: 14, color: 'var(--text-tertiary)', flexShrink: 0 }}>
-                      added
-                    </span>
-                  ) : (
-                    <button
-                      onClick={e => { e.stopPropagation(); handleAdd(item) }}
-                      disabled={isPending}
-                      style={{
-                        background: 'none', border: 'none', padding: 0,
-                        fontSize: 14,
-                        color: isPending ? 'var(--text-tertiary)' : 'var(--amber-600)',
-                        cursor: isPending ? 'default' : 'pointer',
-                        flexShrink: 0, fontFamily: 'inherit',
-                      }}
-                    >
-                      + add
-                    </button>
-                  )}
-                </div>
+                    {/* Middle */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontSize: 17, color: 'var(--text-primary)',
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      }}>
+                        {item.display_text}
+                      </div>
+                      <div style={{ fontSize: 14, color: 'var(--text-tertiary)', marginTop: 1 }}>
+                        {subTime(item.queried_at)}
+                      </div>
+                    </div>
+
+                    {/* Right */}
+                    {isAdded ? (
+                      <span style={{ fontSize: 14, color: 'var(--text-tertiary)', flexShrink: 0 }}>
+                        added
+                      </span>
+                    ) : (
+                      <button
+                        onClick={e => { e.stopPropagation(); handleAdd(item) }}
+                        disabled={isPending}
+                        style={{
+                          background: 'none', border: 'none', padding: 0,
+                          fontSize: 14,
+                          color: isPending ? 'var(--text-tertiary)' : 'var(--amber-600)',
+                          cursor: isPending ? 'default' : 'pointer',
+                          flexShrink: 0, fontFamily: 'inherit',
+                        }}
+                      >
+                        + add
+                      </button>
+                    )}
+                  </div>
+                </SwipeToDelete>
               )
             })}
           </div>
