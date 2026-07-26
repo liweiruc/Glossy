@@ -555,6 +555,45 @@ SaveBar（固定底部）
 
 ---
 
+## 屏幕 11：登录（Login）
+
+路由：`/login`，无需认证即可访问。
+
+布局：垂直居中全屏，最大宽度 360px，水平居中。
+
+组件：
+
+- **品牌标题**：App 名"Glossy"（28px，700，琥珀橙），副标题"登录继续"（13px，次要文字色）
+- **邮箱输入框**：type=email，placeholder="邮箱"，autoComplete="email"
+- **密码输入框**：type=password，placeholder="密码"，autoComplete="current-password"
+- **错误提示**：表单内行内展示，红色（#dc2626），12px，居中
+- **登录按钮**：全宽，琥珀橙背景，加载中时变灰并显示"登录中…"
+- **注册链接**：按钮下方，"还没有账号？注册"，"注册"为琥珀橙链接，跳转 `/register`
+
+交互：登录成功后 navigate 到 `/`。
+
+---
+
+## 屏幕 12：注册（Register）
+
+路由：`/register`，无需认证即可访问。
+
+布局：同登录屏，垂直居中全屏，最大宽度 360px。
+
+组件：
+
+- **品牌标题**：App 名"Glossy"，副标题"创建账号"
+- **邮箱输入框**：type=email，autoComplete="email"
+- **密码输入框**：placeholder="密码（至少 6 位）"，autoComplete="new-password"
+- **确认密码输入框**：placeholder="确认密码"，autoComplete="new-password"
+- **错误提示**：行内展示常见 Firebase 错误（邮箱已注册、密码过短、格式错误）
+- **注册按钮**：全宽，琥珀橙，加载中时变灰并显示"注册中…"
+- **登录链接**：按钮下方，"已有账号？登录"，"登录"为琥珀橙链接，跳转 `/login`
+
+交互：注册成功后 navigate 到 `/`；密码与确认密码不一致时前端拦截，显示"两次输入的密码不一致"。
+
+---
+
 ## 交互状态汇总
 
 | 状态 | 描述 |

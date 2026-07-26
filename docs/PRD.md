@@ -26,11 +26,11 @@ Glossy 是一款专注于"查得到、记得住"的英语学习工具。区别�
 - **查得快**：本地缓存所有查过的词，再次查询无需联网
 - **翻得地道**：调用大模型生成三种风格的翻译（口语 / 正式 / 地道）
 - **记得住**：基于 SM-2 算法的科学复习机制，把查过的词和翻译过的句子彻底掌握
-- **数据自持**：所有数据存在用户本地，无账号、无云同步、无追踪
+- **数据安全**：账号体系由 Firebase Auth 管理；学习数据通过 Firestore 跨设备同步，规则确保仅本人可访问
 
 ### 1.4 设计原则
 
-- **本地优先**：数据全部在用户设备，不上传服务器
+- **本地优先**：IndexedDB 缓存所有查询结果，离线依然可用；登录后通过 Firestore 实时同步到云端
 - **极简克制**：UI 大量留白、低饱和、单一点缀色（琥珀橙）
 - **不打扰**：无推送、无每日提醒、不强制打卡
 - **诚实透明**：用户带自己的 API key，明确告知数据流向
@@ -57,7 +57,6 @@ Glossy 是一款专注于"查得到、记得住"的英语学习工具。区别�
 
 ### 2.2 不在 MVP 范围内
 
-- 账号系统、云同步、跨设备同步
 - 复习提醒推送
 - 数据导出 / 导入
 - 词典 API 集成（一律用 LLM 生成）
@@ -71,11 +70,13 @@ Glossy 是一款专注于"查得到、记得住"的英语学习工具。区别�
 
 ### 3.1 首次使用
 
-1. 打开 PWA → 看到首页
-2. 首页显示空状态卡片："请先配置 AI 模型"
-3. 点击进入设置页
-4. 按指引获取并填入 API 配置（base URL、API key、两个模型名）
-5. 保存返回首页，开始第一次查词
+1. 打开 PWA → 未登录，自动跳转至登录页（`/login`）
+2. 点击"注册"链接，进入注册页（`/register`）
+3. 填写邮箱和密码（至少 6 位）→ 点击注册
+4. 注册成功后自动登录，跳转至首页
+5. 首页显示空状态卡片："请先配置 AI 模型"
+6. 点击进入设置页，填入 API 配置（base URL、API key、两个模型名）
+7. 保存返回首页，开始第一次查词
 
 ### 3.2 主线一：查词
 
@@ -179,7 +180,7 @@ Glossy 是一款专注于"查得到、记得住"的英语学习工具。区别�
 
 ### 5.1 存储方案
 
-使用浏览器 IndexedDB，通过 Dexie.js 封装。所有数据本地存储，永不上传。
+使用浏览器 IndexedDB，通过 Dexie.js 封装，作为本地读写层和离线缓存。登录后通过 Firebase Firestore 实时同步用户数据（history、review_items、review_logs）；word_cache 和 translation_cache 由全部已登录用户共享读写。
 
 ### 5.2 表结构
 
@@ -470,44 +471,30 @@ function applyRating(item, rating) {
 
 ### 7.3 查词 Prompt
 
-```
-You are an English-Chinese bilingual dictionary for Chinese learners of
-English. Your audience is general-interest learners — people who watch
-American shows, read English social media, listen to English podcasts.
-They are not preparing for exams.
+源文件 `src/prompts/lookup.ts`（以代码为准，改动请同步本节）。`{WORD}` 由 `buildLookupPrompt()` 替换为 lemmatize 后的原形，而非用户原始输入。
 
-Given an English word or phrase, return its dictionary entry as strict JSON.
+```
+You are an English-Chinese bilingual dictionary for Chinese learners. Audience: general-interest learners who watch American shows, read social media, and listen to podcasts — not exam-focused.
+
+Given an English word or phrase, return a dictionary entry as strict JSON.
 
 Rules:
-1. Return at most 5 definitions, ordered by frequency of use in modern
-   everyday English. The first definition must be the most common one a
-   casual learner is likely to encounter.
-2. Skip rare, archaic, technical, or specialized definitions unless the
-   word is primarily used that way.
-3. For each definition, write:
-   - "pos": part of speech in standard abbreviation (n., v., adj., adv.,
-     prep., conj., phrasal v., idiom, etc.)
-   - "en": a clear, short English definition (under 15 words)
-   - "cn": the natural Chinese translation. Use the most common Chinese
-     equivalent, not a literal word-for-word rendering. Multiple short
-     options separated by 顿号 are fine when needed.
-4. For each definition, give 1-2 example sentences. Examples must:
-   - Sound like real, modern, conversational English — the kind of
-     sentence you'd actually hear in a Netflix show, a YouTube vlog, or
-     a casual chat. NOT textbook-style sentences.
-   - Use simple, common surrounding vocabulary — the example illustrates
-     THIS word, so don't pile on other hard words.
-   - Be 6-15 words long.
-   - Each example needs a Chinese translation that flows naturally in
-     Chinese, not a word-for-word translation.
-5. Phonetics: provide both UK and US IPA, in slashes. If a word has
-   identical UK/US pronunciation, still list both — they may differ in
-   stress notation.
-6. Output ONLY the JSON. No preamble, no explanation, no markdown fences.
+1. At most 5 definitions. Skip rare, archaic, or technical senses unless that's the primary usage.
+2. Group by part of speech: definitions sharing a "pos" must be consecutive, never interleaved with another part of speech. Order the groups by how common that part of speech is for this word, and order senses within each group the same way — so the very first definition is still the most common sense overall.
+3. Each definition:
+   - "pos": standard abbreviation (n., v., adj., adv., prep., conj., phrasal v., idiom, etc.)
+   - "en": clear, short English definition (under 15 words)
+   - "cn": natural Chinese equivalent; multiple options separated by 顿号 if needed
+4. Each definition gets exactly 1 example sentence:
+   - Natural, conversational — Netflix/YouTube level, not textbook
+   - Keep surrounding vocabulary simple (the example showcases THIS word)
+   - No word limit — give it as much context as the sense needs to be unmistakable
+   - Add a fluent Chinese translation (not word-for-word)
+5. Provide both UK and US IPA in slashes.
+6. Output ONLY the JSON. No preamble or markdown fences.
 
 Schema:
 {
-  "word": "<the lemma>",
   "phonetic_uk": "/.../",
   "phonetic_us": "/.../",
   "definitions": [
@@ -515,15 +502,15 @@ Schema:
       "pos": "v.",
       "en": "...",
       "cn": "...",
-      "examples": [
-        { "en": "...", "cn": "..." }
-      ]
+      "examples": [{ "en": "...", "cn": "..." }]
     }
   ]
 }
 
-Word to look up: {WORD}
+Word: {WORD}
 ```
+
+响应不含 `word` 字段——lemma 由前端 `lookupWord()` 自己填入 `WordCache`，不用模型回显（见 `src/api/lookup.ts`）。
 
 ### 7.4 翻译 Prompt
 
@@ -772,7 +759,7 @@ async function callLLM(prompt, model) {
 |------|------|
 | 用户群定为泛兴趣学习者中愿意自配 API 的用户 | 避免承担 LLM 调用成本，保留产品长期可持续性 |
 | PWA 而非原生 App | 一份代码跨平台，开发成本低，适合个人项目验证 |
-| 纯本地数据，无账号系统 | 简化架构，强调隐私，符合 PWA 精神 |
+| Firebase Auth + Firestore 同步 | 支持多设备无缝继续学习；IndexedDB 保留本地优先读写 |
 | SM-2 而非 FSRS | SM-2 实现简单且经过验证，FSRS 复杂度过高 |
 | 四档评分而非六档 | Anki 已验证四档对用户更友好 |
 | 翻译三个版本合并为一张复习卡 | 三个版本互相补充，分开复习割裂学习体验 |
