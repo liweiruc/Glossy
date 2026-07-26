@@ -15,6 +15,7 @@
 - Tailwind CSS v4
 - Firebase（Auth + Firestore）
 - Dexie.js（IndexedDB 本地缓存）
+- Cloudflare Worker（LLM 代理，校验 Firebase ID token 后转发 DeepSeek）
 - vite-plugin-pwa（PWA / Service Worker）
 
 ## 本地开发
@@ -23,11 +24,23 @@
 
 - Node.js 18+
 - 一个 Firebase 项目（需开启 Authentication → 邮箱/密码，以及 Firestore Database）
-- 一个 OpenAI 兼容的 LLM API（如 OpenAI、DeepSeek 等）
+- 一个 Cloudflare 账号和一份 DeepSeek API key（用于部署下面的 LLM 代理 Worker）
+
+### 部署 LLM 代理 Worker
+
+前端不直接调用 LLM，请求经 `worker/` 下的 Cloudflare Worker 转发：Worker 用 Firebase JWKS 校验请求携带的 ID token，通过后再用自己持有的密钥请求 DeepSeek。密钥只存在于 Worker secret，永不下发浏览器，因此用户无需也无法自行配置。
+
+```bash
+cd worker
+npx wrangler secret put DEEPSEEK_API_KEY
+npx wrangler deploy
+```
+
+记下输出的 Worker URL，下一步要用。
 
 ### 配置环境变量
 
-在项目根目录创建 `.env.local`，填入 Firebase 项目配置：
+在项目根目录创建 `.env.local`：
 
 ```env
 VITE_FIREBASE_API_KEY=...
@@ -36,6 +49,8 @@ VITE_FIREBASE_PROJECT_ID=...
 VITE_FIREBASE_STORAGE_BUCKET=...
 VITE_FIREBASE_MESSAGING_SENDER_ID=...
 VITE_FIREBASE_APP_ID=...
+
+VITE_PROXY_URL=https://<your-worker>.workers.dev
 ```
 
 ### 部署 Firestore 安全规则
@@ -51,12 +66,10 @@ npm install
 npm run dev
 ```
 
-LLM API 配置（base URL、API key、模型名）在应用内的设置页填写，存入 IndexedDB，无需环境变量。
-
 ## 构建
 
 ```bash
 npm run build
 ```
 
-产物输出到 `dist/`，可直接部署到 Cloudflare Pages / Vercel / Netlify 等静态托管，需在对应平台配置上述 `VITE_FIREBASE_*` 环境变量。
+产物输出到 `dist/`，可直接部署到 Cloudflare Pages / Vercel / Netlify 等静态托管，需在对应平台配置上述 `VITE_FIREBASE_*` 和 `VITE_PROXY_URL` 环境变量。

@@ -12,14 +12,14 @@ Glossy 是一款专注于"查得到、记得住"的英语学习工具。区别�
 
 ### 1.2 目标用户
 
-愿意自行配置 AI 模型 API 的泛兴趣英语学习者：
+泛兴趣英语学习者：
 
 - 看美剧、油管、英文社交媒体时遇到生词需要查询
 - 想用英文写邮件、评论、社交内容，需要地道表达
 - 不是为了应试，而是为了长期提升英语能力
-- 有一定技术理解力，能够注册 AI 模型账号并获取 API key
+- 愿意注册一个邮箱账号，以换取跨设备同步
 
-明确不覆盖的用户：完全不愿配置 API 的非技术用户。
+不要求任何技术背景：LLM 由服务端代理调用，用户不接触也无法配置 API key。
 
 ### 1.3 核心价值
 
@@ -33,7 +33,7 @@ Glossy 是一款专注于"查得到、记得住"的英语学习工具。区别�
 - **本地优先**：IndexedDB 缓存所有查询结果，离线依然可用；登录后通过 Firestore 实时同步到云端
 - **极简克制**：UI 大量留白、低饱和、单一点缀色（琥珀橙）
 - **不打扰**：无推送、无每日提醒、不强制打卡
-- **诚实透明**：用户带自己的 API key，明确告知数据流向
+- **诚实透明**：明确告知数据流向——LLM 请求经自建 Worker 代理转发，密钥不下发前端
 
 ---
 
@@ -52,7 +52,7 @@ Glossy 是一款专注于"查得到、记得住"的英语学习工具。区别�
 | 复习会话 | 卡片式复习，支持单词卡和句子卡 |
 | 评分调度 | 四档评分（Again/Hard/Good/Easy），SM-2 算法调度 |
 | 历史记录 | 所有查询自动留痕，可追溯、可补加复习 |
-| API 配置 | 用户设置自定义 OpenAI 兼容 API |
+| 账号与同步 | 邮箱注册登录，学习数据经 Firestore 实时跨设备同步 |
 | 本地缓存 | 查过的词和翻译永久缓存，离线可查 |
 
 ### 2.2 不在 MVP 范围内
@@ -74,9 +74,7 @@ Glossy 是一款专注于"查得到、记得住"的英语学习工具。区别�
 2. 点击"注册"链接，进入注册页（`/register`）
 3. 填写邮箱和密码（至少 6 位）→ 点击注册
 4. 注册成功后自动登录，跳转至首页
-5. 首页显示空状态卡片："请先配置 AI 模型"
-6. 点击进入设置页，填入 API 配置（base URL、API key、两个模型名）
-7. 保存返回首页，开始第一次查词
+5. 直接开始第一次查词——无需任何配置
 
 ### 3.2 主线一：查词
 
@@ -150,14 +148,12 @@ Glossy 是一款专注于"查得到、记得住"的英语学习工具。区别�
 - "今日待复习"数字卡片
 - 复习卡前的进度指示
 - 词性标签 pill
-- 设置页保存按钮
 
 ### 4.3 字体规则
 
 - 标题：18px / 22px，font-weight 500
 - 正文：13-14px，font-weight 400
 - 辅助文字：11-12px，font-weight 400
-- 代码 / API key 字段：等宽字体
 
 ### 4.4 屏幕清单
 
@@ -171,8 +167,9 @@ Glossy 是一款专注于"查得到、记得住"的英语学习工具。区别�
 | 6 | 复习卡（回忆面） | 极简，单词或中文句子 |
 | 7 | 复习卡（揭晓面） | 完整释义 + 四档评分按钮 |
 | 8 | 历史记录 | 按日期分组的查询记录 |
-| 9 | 首次空状态 | API 未配置时的引导卡片 |
-| 10 | 设置页 | API 配置 + 安全说明 |
+| 9 | 设置页 | 账号信息 + 退出登录 |
+| 10 | 登录 | 邮箱密码登录，未登录时的落地页 |
+| 11 | 注册 | 邮箱密码注册 |
 
 ---
 
@@ -306,14 +303,11 @@ snapshot 结构（句子）：
 
 #### settings（设置）
 
-key-value 单条记录存储
+key-value 存储。目前不含任何用户可配置项，只用来记同步状态：
 
-| 字段 | 类型 | 默认值 |
-|------|------|--------|
-| api_base_url | string | "https://api.deepseek.com/v1" |
-| api_key | string | （空） |
-| model_lookup | string | "deepseek-chat" |
-| model_translate | string | "deepseek-chat" |
+| key | value | 用途 |
+|-----|-------|------|
+| `bootstrapped:{uid}` | 写入时间戳字符串 | 标记本设备已为该用户跑过一次 `pushLocalOnlyItems`。缺了它，登录前就存在的本地数据会被反复上传，把其他设备已删除的条目重新拉回来 |
 
 ### 5.3 索引
 
@@ -447,27 +441,31 @@ function applyRating(item, rating) {
 
 ## 7. LLM 集成
 
-### 7.1 协议规范
+### 7.1 调用链路
 
-仅支持 OpenAI 兼容的 chat completions API。意味着以下服务都可以通过同一套代码调用：
+前端不直接调用 LLM，请求经自建的 Cloudflare Worker 代理转发：
 
-- DeepSeek
-- OpenAI
-- Anthropic Claude（兼容端点）
-- Moonshot Kimi
-- 智谱 GLM
-- OpenRouter（聚合多家模型）
-- 本地 Ollama
-- 任何其他 OpenAI 兼容的服务
+```
+前端 fetchViaProxy（src/api/llm.ts）
+  → POST VITE_PROXY_URL，body { prompt, model }
+    Authorization: Bearer <Firebase ID token>
+  → Worker（worker/src/index.ts）
+      用 Firebase JWKS 做 RS256 验签，校验 exp / aud / iss
+      模型白名单 deepseek-chat / deepseek-reasoner，其余一律 400
+  → DeepSeek /v1/chat/completions（stream: true，temperature 0.3）
+  → Worker 把 SSE 的 delta 拼成 text/plain 流式返回
+  → 前端边读边触发 onStream
+```
+
+代价是模型不再可插拔——换供应商得改 Worker 并重新部署，前端改不动。换来的是
+`DEEPSEEK_API_KEY` 只存在于 Worker secret，永不下发浏览器，用户也就不必自备密钥。
 
 ### 7.2 用户配置项
 
-| 项 | 说明 |
-|----|------|
-| Base URL | API endpoint，默认 https://api.deepseek.com/v1 |
-| API Key | 用户的密钥，明文存 IndexedDB |
-| Lookup Model | 查词用的模型名，默认 deepseek-chat |
-| Translate Model | 翻译用的模型名，默认 deepseek-chat |
+无。设置页只有账号信息和退出登录（见屏幕 9）。
+
+Base URL、API key、模型名均不可配置：密钥在 Worker secret 里，模型由 `getModel()`
+硬编码为 `deepseek-chat`。`settings` store 目前只存同步标记 `bootstrapped:{uid}`。
 
 ### 7.3 查词 Prompt
 
@@ -514,83 +512,45 @@ Word: {WORD}
 
 ### 7.4 翻译 Prompt
 
+源文件 `src/prompts/translate.ts`（以代码为准，改动请同步本节）。`{TEXT}` 由
+`buildTranslatePrompt()` 替换为用户输入的中文原文。
+
 ```
-You are an expert translator helping Chinese learners of English.
-Your goal is to produce English translations that sound natural to
-native speakers, with three distinct styles, and to flag expressions
-worth learning.
+You are an expert translator helping Chinese learners of English. Produce natural English translations in three distinct styles, plus learnable expressions.
 
-Given a Chinese sentence (or short paragraph), produce three English
-translations and a list of "learnable spans" found across them.
+Given Chinese text, produce three translations and a list of learnable spans.
 
-The three styles:
+Styles:
+1. CASUAL: How a native speaker would say it in conversation or on social media. Contractions fine; common slang OK.
+2. FORMAL: For professional email, news, or academic writing. No contractions; precise vocabulary; complete sentences.
+3. IDIOMATIC: Uses an idiom, phrasal verb, or set expression that captures the spirit of the original — something a learner couldn't easily reach on their own. If no genuine idiom fits naturally, return the casual version with idiomatic_note "(no distinct idiomatic version available)".
 
-1. CASUAL: How a native English speaker would actually say this in
-   everyday conversation, texting a friend, or commenting on social
-   media. Contractions are fine. Allow common slang if appropriate.
-   The goal is naturalness, not formality.
+All versions preserve the original meaning. Keep proper nouns in their original form.
 
-2. FORMAL: How this would appear in a professional email, business
-   document, news article, or academic context. Full forms (no
-   contractions for "don't" etc.), precise vocabulary, complete
-   sentence structure.
+Learnable spans (2–4 total, quality over quantity):
+Identify expressions across all three versions worth studying:
+- "phrasal_verb": e.g. "pull off", "get over"
+- "idiom": e.g. "easier said than done", "on the same page"
+- "useful_word": uncommon but practical single words, e.g. "mitigate", "seamless" — NOT common words like "good", "make"
 
-3. IDIOMATIC: A version that uses an English idiom, phrasal verb, or
-   set expression that captures the spirit of the Chinese original
-   in a way the casual or formal versions don't. This is the version
-   that teaches the learner something they couldn't easily reach
-   themselves. If no genuine idiom fits naturally, return the casual
-   version with a note "(no distinct idiomatic version available)"
-   in idiomatic_note — never force a bad idiom.
+For each span: "text" (exact text as it appears), "category", "version" ("casual" / "formal" / "idiomatic"). If a span appears in multiple versions, list it once in the most prominent one.
 
-Rules:
-- All three versions should preserve the original meaning faithfully.
-  Style differs; meaning does not.
-- Keep each version to one or two sentences, matching the original's
-  length unless the target language genuinely requires more or fewer
-  words.
-- Do not translate proper nouns into Chinese (keep names in original).
-
-Learnable spans:
-After producing the three translations, identify expressions across
-all three versions that a Chinese learner would benefit from studying.
-Three categories:
-- "phrasal_verb": phrasal verbs (e.g., "pull off", "get over", "take on")
-- "idiom": multi-word idioms or set expressions (e.g., "easier said
-  than done", "on the same page", "a piece of cake")
-- "useful_word": single words that are uncommon but practical (e.g.,
-  "mitigate", "articulate", "seamless"). Do NOT include common words
-  like "good", "very", "make", "the".
-
-For each span, return:
-- "text": the exact text as it appears in one of the translations
-- "category": one of the three above
-- "version": which version it appears in ("casual" / "formal" / "idiomatic")
-
-If a span appears in multiple versions, list it once, picking the
-version where it's most prominent. Aim for 2-5 spans total — not
-every translation will have many. Quality over quantity.
-
-Output ONLY the JSON. No preamble, no explanation, no markdown fences.
+Output ONLY the JSON. No preamble or markdown fences.
 
 Schema:
 {
-  "source": "<original Chinese>",
   "casual": "...",
   "formal": "...",
   "idiomatic": "...",
   "idiomatic_note": null,
-  "spans": [
-    {
-      "text": "pull off",
-      "category": "phrasal_verb",
-      "version": "idiomatic"
-    }
-  ]
+  "spans": [{ "text": "pull off", "category": "phrasal_verb", "version": "idiomatic" }]
 }
 
-Chinese to translate: {TEXT}
+Chinese text: {TEXT}
 ```
+
+与查词 prompt 同理，响应不含 `source` 字段——中文原文前端本来就有，不必让模型回显。
+spans 上限也从 2-5 收到 2-4（均为 `8f17b13` 的提速改动）。
 
 ### 7.5 解析健壮性
 
@@ -605,21 +565,30 @@ LLM 偶尔输出非纯 JSON 内容（前后多一句话、包裹 markdown 代码
 
 API 调用可能的失败场景及对应人话提示：
 
-| 错误 | 用户看到的提示 |
-|------|----------------|
-| 401 Unauthorized | API key 似乎不正确，请到设置页检查 |
-| 402 / 余额不足 | 您的账户余额不足，请到 AI 模型提供商充值 |
-| 404 模型不存在 | 模型名称似乎不正确，请到设置页检查 |
-| 网络超时 | 网络连接超时，请检查网络后重试 |
-| 5xx 服务异常 | AI 模型服务暂时不可用，请稍后重试 |
-| JSON 解析失败 | AI 模型返回格式异常，请稍后重试 |
+`src/api/llm.ts` 把所有失败归为 5 个 `GlossyErrorCode`，`getErrorMessage()` 负责映射：
+
+| code | 触发条件 | 用户看到的提示 |
+|------|----------|----------------|
+| `unauthenticated` | 未登录（`firebaseAuth.currentUser` 为空） | 请先登录后再使用 |
+| `timeout` | 请求超过 60 秒（`AbortSignal.timeout`） | 网络连接超时，请检查网络后重试 |
+| `network` | fetch 抛错，或 `navigator.onLine` 为 false | 当前无网络连接，无法获取新内容 |
+| `server` | 响应非 2xx（401 / 402 / 404 / 5xx 均归此类） | AI 模型服务暂时不可用，请稍后重试 |
+| `parse` | 重试一次后仍无法 `JSON.parse` | AI 模型返回格式异常，请稍后重试 |
+
+余额不足、模型名错误不再单独提示：密钥和模型都由 Worker 掌管，用户无从修正，
+细分错误码只会造成困惑，一律并入 `server`。
 
 ### 7.7 安全性说明
 
-- API key 存储在用户浏览器 IndexedDB 中，明文存储
-- 不做"前端加密"——加密密钥也存在用户能访问的地方，是自欺欺人
-- 设置页明确提示用户："请勿在公共或共享设备上输入 API key"
-- API 请求直接从前端发往用户配置的 endpoint，不经过任何第三方服务器
+- `DEEPSEEK_API_KEY` 只存在于 Cloudflare Worker secret（`wrangler secret put` 设置），
+  不写进 `wrangler.toml`，也永不下发前端
+- Worker 只接受 POST，且必须携带有效的 Firebase ID token——用 Firebase JWKS 做 RS256
+  验签并校验 `exp` / `aud` / `iss`，未登录者无法借道白嫖 DeepSeek
+- 模型白名单硬编码在 Worker 内，前端传入白名单外的 model 一律 400
+- 用户数据按 `users/{uid}/` 隔离，`firestore.rules` 限定仅本人可读写
+- `word_cache` / `translation_cache` 由全体已登录用户共享读写——这是有意的成本优化
+  （同一个词全网只调一次 LLM），代价是任何登录用户都能读写这两个 collection，
+  因此其中不得存放任何用户私有信息，删除操作也绝不可级联到这里
 
 ---
 
@@ -629,27 +598,35 @@ API 调用可能的失败场景及对应人话提示：
 
 | 层 | 技术 |
 |----|------|
-| 框架 | React + Vite |
+| 框架 | React + Vite + TypeScript |
 | 样式 | Tailwind CSS |
 | 路由 | React Router |
-| 数据库 | IndexedDB（通过 Dexie.js） |
+| 本地数据库 | IndexedDB（通过 Dexie.js） |
+| 云数据库 / 实时同步 | Firebase Firestore（persistentLocalCache + 多标签页管理） |
+| 认证 | Firebase Auth（邮箱密码） |
+| LLM 代理 | Cloudflare Worker（校验 Firebase ID token 后转发 DeepSeek，流式返回） |
 | 词形还原 | compromise.js |
 | PWA | Workbox（Service Worker） |
 | 图标 | Lucide React |
-| 部署 | Cloudflare Pages / Vercel / Netlify 任意 |
+| 部署 | 前端 Cloudflare Pages / Vercel / Netlify 任意；Worker 用 wrangler 单独部署 |
 
-### 8.2 目录结构建议
+### 8.2 目录结构
 
 ```
 /src
-  /components       UI 组件
-  /pages           页面级组件（首页、查词、翻译、复习、历史、设置）
-  /db              Dexie schema 与数据访问层
+  /auth            Firebase Auth 上下文（AuthContext.tsx）
+  /components      可复用 UI 组件
+  /pages           页面级组件（Home、Lookup、Translate、Review、History、Settings、Login、Register）
+  /db              Dexie schema（index.ts）、查询层（queries.ts）、Firestore 同步层（firestore-sync.ts）
   /algorithms      SM-2 等核心算法
-  /api             LLM API 调用与错误处理
-  /prompts         查词与翻译的 prompt 文本（独立文件，便于版本管理）
+  /api             调用 Worker 代理（llm.ts）与错误处理
+  /prompts         查词与翻译的 prompt 文本（独立文件，便于迭代）
   /utils           lemmatize、hash 等工具函数
-  /styles          全局样式
+  firebase.ts      Firebase app 初始化（Auth + Firestore）
+/worker
+  src/index.ts     Cloudflare Worker：校验 Firebase ID token → 调用 DeepSeek → 流式转发
+  wrangler.toml    Worker 配置（DEEPSEEK_API_KEY 是 secret，不在此文件里）
+firestore.rules    Firestore 安全规则（需 firebase deploy 部署）
 ```
 
 ### 8.3 PWA 关键配置
@@ -661,33 +638,41 @@ API 调用可能的失败场景及对应人话提示：
 
 ### 8.4 API 调用骨架
 
-```javascript
-async function callLLM(prompt, model) {
-  const settings = await db.settings.get('config');
+前端只跟自己的 Worker 说话，不知道 DeepSeek 的存在：
 
-  const response = await fetch(`${settings.api_base_url}/chat/completions`, {
+```javascript
+// src/api/llm.ts
+async function fetchViaProxy(prompt, model, signal, onStream) {
+  const currentUser = firebaseAuth.currentUser;
+  if (!currentUser) throw new GlossyError('Not authenticated', 'unauthenticated');
+
+  const response = await fetch(import.meta.env.VITE_PROXY_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${settings.api_key}`
+      Authorization: `Bearer ${await currentUser.getIdToken()}`
     },
-    body: JSON.stringify({
-      model: model,
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.3
-    })
+    body: JSON.stringify({ prompt, model }),
+    signal: AbortSignal.timeout(60_000)
   });
 
-  if (!response.ok) {
-    throw mapHttpError(response.status);
+  if (!response.ok) throw new GlossyError(`HTTP ${response.status}`, 'server');
+
+  // Worker 返回 text/plain 流，边读边拼
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let text = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    text += decoder.decode(value, { stream: true });
+    onStream?.();   // 首个 chunk 到达即把 UI 从"正在查询"切到"AI 正在回复"
   }
-
-  const data = await response.json();
-  const text = data.choices[0].message.content;
-
-  return parseJSON(text);
+  return text;
 }
 ```
+
+外层 `callLLM` 负责 `JSON.parse`，失败时原样重发一次再放弃（见 7.5）。
 
 ---
 
@@ -697,7 +682,7 @@ async function callLLM(prompt, model) {
 
 - 首屏加载（PWA 已缓存）：< 1 秒
 - 缓存命中的查词响应：< 100 毫秒
-- LLM 调用的查词响应：取决于用户选择的模型，预期 1-3 秒
+- LLM 调用的查词响应：deepseek-chat 流式返回，预期 1-3 秒（首字节到达即切换提示文案）
 - LLM 调用的翻译响应：预期 2-5 秒
 - 复习卡片切换：< 200 毫秒，包含 IndexedDB 写入
 
@@ -747,7 +732,7 @@ async function callLLM(prompt, model) {
 | 域名 | 部署到哪个域名 |
 | 开源 / 闭源 | 是否开源代码托管 |
 | Logo 与品牌 | 视觉品牌设计 |
-| 用户文档站点 | API 配置详细指南托管在哪里 |
+| LLM 成本控制 | 代理由项目方付费，需要限流 / 配额策略，目前没有 |
 
 ---
 
@@ -757,7 +742,7 @@ async function callLLM(prompt, model) {
 
 | 决策 | 理由 |
 |------|------|
-| 用户群定为泛兴趣学习者中愿意自配 API 的用户 | 避免承担 LLM 调用成本，保留产品长期可持续性 |
+| word_cache / translation_cache 全体用户共享 | 同一个词全网只调一次 LLM，摊薄自建代理的调用成本 |
 | PWA 而非原生 App | 一份代码跨平台，开发成本低，适合个人项目验证 |
 | Firebase Auth + Firestore 同步 | 支持多设备无缝继续学习；IndexedDB 保留本地优先读写 |
 | SM-2 而非 FSRS | SM-2 实现简单且经过验证，FSRS 复杂度过高 |
@@ -767,8 +752,8 @@ async function callLLM(prompt, model) {
 | 释义和例句全部用 LLM 生成而非词典 API | 简化集成，统一风格，例句更生活化 |
 | 所有查词记录进 history，仅主动加入的进复习本 | 区分被动留痕与主动学习意图 |
 | 缓存数据与复习本快照解耦 | 避免缓存更新影响用户当初看到的复习内容 |
-| LLM 协议统一为 OpenAI 兼容 | 一份代码支持几乎所有主流 LLM 服务 |
-| API key 不做前端加密 | 加密密钥也在前端，加密无意义且误导用户 |
+| Worker 内写死模型白名单 | 代理由项目方付费，不限制模型等于把账单敞开给任何登录用户 |
+| LLM 经 Worker 代理而非前端直连 | 密钥不下发浏览器；用户无需自备 key，产品可面向非技术用户 |
 
 ---
 

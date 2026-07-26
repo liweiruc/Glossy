@@ -83,7 +83,6 @@ BottomNav（Home 激活）
   - Lookup 状态 placeholder："Type an English word"
   - Translate 状态 placeholder："输入中文，获取地道英文翻译"
 - 回车 / 点击搜索图标触发查询
-- API key 未配置时：整个 SearchBar 置灰（opacity 0.5），不可交互
 
 ### RecentList
 
@@ -95,16 +94,12 @@ BottomNav（Home 激活）
   - 底部：0.5px 三级边框色分隔线，最后一行无分隔线
 - 点击某行：直接进入对应的查词结果或翻译结果页
 
-### 空状态（API 未配置时）
+### 空状态（尚无查询记录时）
 
-替换 RecentList 区域，显示引导卡片：
+首次登录、尚无任何查询记录时，RecentList 区域整块不渲染（`recent.length > 0` 才输出
+`<section>`），页面只剩 TabBar 和 SearchBar。
 
-- 背景：`#FAEEDA`（琥珀 50），圆角 14px，内边距 22px 18px
-- 顶部图标：`Key`（22px，琥珀橙），放在 44px 圆形白色背景中，居中
-- 标题："Set up your AI model first"（15px weight500，`#412402`）
-- 描述："Glossy uses any OpenAI-compatible API to look up words and translate. Bring your own key — your data stays on your device."（12px，`#854F0B`，行高 1.5）
-- 按钮："Open settings"（琥珀橙背景，白色文字，13px weight500，左侧 `ArrowRight` 图标）
-- 卡片下方小字："DeepSeek, OpenAI, Claude, OpenRouter, Ollama, and most others all work."（11px，三级色，居中）
+不再有"请先配置 AI 模型"引导卡片——LLM 由 Worker 代理，用户无需配置，登录后即可直接查词。
 
 ---
 
@@ -470,92 +465,42 @@ BottomNav（History 激活）
 
 ---
 
-## 屏幕 9：首次空状态（First Use）
+## 屏幕 9：设置页（Settings）
 
-即首页在 API key 未配置时的状态，见屏幕 1"空状态（API 未配置时）"章节，不重复描述。
-
----
-
-## 屏幕 10：设置页（Settings）
+路由：`/settings`，需登录。
 
 ### 布局
 
 ```
-StatusBar
 AppBar
-  左：ChevronLeft（返回，保存后返回 / 未改动直接返回）
-  中："Settings"（14px 次要色 weight400）
-  右：空白
-Body（padding 水平 18px，可滚动）
-  SectionTitle："AI model"
-  GuideCard（获取 API key 的步骤引导）
-  Field × 4（Base URL、API Key、Lookup Model、Translate Model）
-  SecurityNote
-SaveBar（固定底部）
+  左：ChevronLeft（返回上一页）
+  中："Settings"（18px 次要色 weight400）
+  右：28px 占位空白（保证标题真正居中）
+Body（padding 24px 18px，可滚动）
+  SectionTitle："账号"
+  AccountRow
 ```
 
-### GuideCard
+### SectionTitle
 
-- 背景：二级背景色，圆角 10px，内边距 12px 14px，margin-bottom 14px
-- 标题行：`Info` 图标（14px，琥珀橙）+ "How to get an API key"（12px weight500，正常色）
-- 步骤列表（`<ol>`，11px，次要色，行高 1.6，padding-left 16px）：
-  1. Sign up at the provider's site
-  2. Top up a small balance (a few dollars goes far)
-  3. Create an API key in their dashboard
-  4. Paste it below
-- 底部链接："DeepSeek setup guide"（11px，琥珀橙）+ `ExternalLink` 图标（11px）
-  - 点击：在新 tab 打开详细指引页（你需要自己创建这个指引页）
+- "账号"，14px，三级文字色，全大写 + 字母间距 0.5px，weight 500，margin-bottom 12px
 
-### Field（表单字段）
+### AccountRow
 
-每个字段（FieldGroup）包含：
+- 二级背景色，圆角 10px，内边距 12px 14px，flex 两端对齐
+- 左：`User` 图标（16px，次要色）+ 当前登录邮箱（17px，正常色）
+- 右："退出"按钮 —— `LogOut` 图标（14px）+ 文字（17px，次要色），无背景无边框
+  - 点击：`logout()` 成功后 `navigate('/login', { replace: true })`
 
-- **FieldLabel**（flex 两端对齐）：
-  - 左：字段名（13px，正常色）
-  - 右：必填标记 `*`（12px，红色）—— Base URL 和 API Key 有此标记
-- **FieldInput**：
-  - 全宽，二级背景色，0.5px 三级边框，圆角 8px，内边距 9px 11px，13px
-  - URL 和 model 字段：等宽字体（`font-family: monospace`）
-  - API Key 字段：
-    - 默认 `type="password"`（内容显示为圆点）
-    - 右侧有 `Eye` / `EyeOff` 图标切换明文/密文显示
-    - 用 `InputWrapper`（position: relative）包裹，图标绝对定位在右侧
-- **FieldHelp**（字段说明，margin-top 5px）：
-  - 11px，三级色，行高 1.5
-  - 各字段说明：
-    - Base URL："The endpoint for an OpenAI-compatible API. Default is DeepSeek."
-    - API Key："Stored only on this device. Never sent anywhere except to the API."
-    - Lookup Model："Used for word lookups. A faster, cheaper model is fine here."
-    - Translate Model："Used for sentence translation. A stronger model gives more natural results."
+### 没有 LLM 配置项
 
-四个字段的默认值：
-
-| 字段 | 默认值 |
-|------|--------|
-| Base URL | `https://api.deepseek.com/v1` |
-| API Key | （空） |
-| Lookup Model | `deepseek-v4-flash` |
-| Translate Model | `deepseek-v4-pro` |
-
-### SecurityNote
-
-- flex 横排，gap 8px，二级背景色，圆角 8px，内边距 10px 12px，margin-top 14px
-- 左：`ShieldCheck` 图标（16px，三级色，flex-shrink 0，margin-top 1px）
-- 右：11px，次要色，行高 1.5
-  - 文字："Your API key lives in this browser only. Don't enter it on a shared or public computer. Clearing site data will erase it."
-
-### SaveBar（固定底部）
-
-- 顶部：0.5px 三级边框
-- 内边距：10px 18px 14px
-- 按钮"Save"：
-  - 全宽，琥珀橙背景，白色文字，14px weight500，圆角 10px
-  - 左侧 `Check` 图标（14px）
-  - 点击：将四个字段值写入 `settings` store，弹出 Toast"设置已保存"，返回上一页
+Base URL、API key、模型名都不在这里，用户也无从配置：LLM 请求经 Cloudflare Worker
+代理，DeepSeek 密钥存在 Worker secret 中，模型由 `getModel()` 硬编码为 `deepseek-chat`。
+因此本屏没有表单、没有保存按钮，也没有底部 SaveBar。
 
 ---
 
-## 屏幕 11：登录（Login）
+## 屏幕 10：登录（Login）
 
 路由：`/login`，无需认证即可访问。
 
@@ -574,7 +519,7 @@ SaveBar（固定底部）
 
 ---
 
-## 屏幕 12：注册（Register）
+## 屏幕 11：注册（Register）
 
 路由：`/register`，无需认证即可访问。
 
