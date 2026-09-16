@@ -1,46 +1,73 @@
 import { Fragment, memo } from 'react'
+import type { ReactNode } from 'react'
+import { WORD_RE } from '../utils/highlight'
 
 interface Props {
   text: string
   onWordClick: (word: string) => void
+  chunks?: string[]
 }
 
-const WORD_RE = /[A-Za-z]+(?:['’\-][A-Za-z]+)*/g
+interface Range {
+  start: number
+  end: number
+}
 
-function ClickableTextInner({ text, onWordClick }: Props) {
-  const parts: Array<{ kind: 'word' | 'gap'; text: string }> = []
-  let last = 0
-  for (const m of text.matchAll(WORD_RE)) {
-    const start = m.index ?? 0
-    if (start > last) parts.push({ kind: 'gap', text: text.slice(last, start) })
-    parts.push({ kind: 'word', text: m[0] })
-    last = start + m[0].length
+// Multi-word expressions are looked up whole: tapping inside "pull off" must not hand
+// back the entry for "pull". Only the first occurrence of each chunk is marked, and
+// overlapping chunks are dropped rather than nested.
+function chunkRanges(text: string, chunks: string[]): Range[] {
+  const lower = text.toLowerCase()
+  const ranges: Range[] = []
+  for (const chunk of chunks) {
+    const needle = chunk.trim().toLowerCase()
+    if (!needle) continue
+    const start = lower.indexOf(needle)
+    if (start < 0) continue
+    const end = start + needle.length
+    if (ranges.some(r => start < r.end && end > r.start)) continue
+    ranges.push({ start, end })
   }
-  if (last < text.length) parts.push({ kind: 'gap', text: text.slice(last) })
+  return ranges.sort((a, b) => a.start - b.start)
+}
 
-  if (parts.length === 0) return <>{text}</>
+function ClickableTextInner({ text, onWordClick, chunks }: Props) {
+  const ranges = chunks?.length ? chunkRanges(text, chunks) : []
+  const nodes: ReactNode[] = []
+  let key = 0
 
-  return (
-    <>
-      {parts.map((p, i) =>
-        p.kind === 'word' ? (
-          <span
-            key={i}
-            className="clickable-word"
-            onClick={() => onWordClick(p.text)}
-            style={{
-              borderBottom: '1px dotted var(--border-secondary)',
-              cursor: 'pointer',
-            }}
-          >
-            {p.text}
-          </span>
-        ) : (
-          <Fragment key={i}>{p.text}</Fragment>
-        )
-      )}
-    </>
-  )
+  // Single words stay tappable but carry no decoration — underlining every word turns
+  // a paragraph into noise. Only chunks are marked, because their extent is the point.
+  function pushWords(slice: string) {
+    let last = 0
+    for (const match of slice.matchAll(WORD_RE)) {
+      const start = match.index ?? 0
+      if (start > last) nodes.push(<Fragment key={key++}>{slice.slice(last, start)}</Fragment>)
+      const word = match[0]
+      nodes.push(
+        <span key={key++} className="clickable-word" onClick={() => onWordClick(word)}>
+          {word}
+        </span>
+      )
+      last = start + word.length
+    }
+    if (last < slice.length) nodes.push(<Fragment key={key++}>{slice.slice(last)}</Fragment>)
+  }
+
+  let cursor = 0
+  for (const range of ranges) {
+    if (range.start > cursor) pushWords(text.slice(cursor, range.start))
+    const chunk = text.slice(range.start, range.end)
+    nodes.push(
+      <span key={key++} className="clickable-chunk" onClick={() => onWordClick(chunk)}>
+        {chunk}
+      </span>
+    )
+    cursor = range.end
+  }
+  if (cursor < text.length) pushWords(text.slice(cursor))
+
+  return <>{nodes}</>
 }
 
 export default memo(ClickableTextInner)

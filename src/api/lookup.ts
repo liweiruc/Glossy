@@ -1,4 +1,4 @@
-import { db } from '../db'
+import { db, WORD_CACHE_SCHEMA } from '../db'
 import type { WordCache, Definition } from '../db'
 import { firebaseAuth } from '../firebase'
 import { lemmatize } from '../utils/lemmatize'
@@ -53,6 +53,7 @@ export async function lookupWord(
       phonetic_us: llmData.phonetic_us ?? '',
       definitions: llmData.definitions ?? [],
       created_at: Date.now(),
+      schema_version: WORD_CACHE_SCHEMA,
     }
 
     await db.word_cache.put(result)

@@ -193,8 +193,9 @@ Glossy 是一款专注于"查得到、记得住"的英语学习工具。区别�
 | phonetic_us | string | 美式音标 |
 | audio_url_uk | string | 英式发音音频地址（可选） |
 | audio_url_us | string | 美式发音音频地址（可选） |
-| definitions | json | 释义数组（含词性、英义、中义、例句） |
+| definitions | json | 释义数组（含词性、语体、英义、中义、例句） |
 | created_at | timestamp | 缓存写入时间 |
+| schema_version | number | 由哪一版 prompt 生成（2 = 含 `register` / `target`）。旧条目没有这个字段，照常渲染 |
 
 definitions 结构：
 
@@ -202,10 +203,12 @@ definitions 结构：
 [
   {
     "pos": "v.",
-    "en": "Move quickly on foot",
+    "en": "to move quickly on your feet, faster than walking",
     "cn": "跑；奔跑",
+    "register": "neutral",
     "examples": [
-      { "en": "She runs every morning.", "cn": "她每天早晨跑步。" }
+      { "en": "I ran for the bus and still missed it.", "cn": "我追着公交车跑，还是没赶上。", "target": "ran" },
+      { "en": "He runs five miles before work every morning.", "cn": "他每天上班前跑五英里。", "target": "runs" }
     ]
   }
 ]
@@ -233,10 +236,13 @@ spans 结构：
   {
     "text": "pull off",
     "category": "phrasal_verb",
-    "version": "idiomatic"
+    "version": "idiomatic",
+    "note": "managed something difficult. Warm, and very common in speech."
   }
 ]
 ```
+
+`note` 是后加的字段，旧翻译缓存里没有；没有 note 的 span 只高亮，不显示说明行。
 
 #### history（查询历史）
 
@@ -303,11 +309,12 @@ snapshot 结构（句子）：
 
 #### settings（设置）
 
-key-value 存储。目前不含任何用户可配置项，只用来记同步状态：
+key-value 存储。本地专属，不参与 Firestore 同步：
 
 | key | value | 用途 |
 |-----|-------|------|
 | `bootstrapped:{uid}` | 写入时间戳字符串 | 标记本设备已为该用户跑过一次 `pushLocalOnlyItems`。缺了它，登录前就存在的本地数据会被反复上传，把其他设备已删除的条目重新拉回来 |
+| `chinese_display` | `always` / `tap` / `never` | 中文何时出现，默认 `tap`（点了才显示）。设置页可改，见屏幕 9。因为不同步，它是"本机显示偏好"而非学习数据 |
 
 ### 5.3 索引
 
@@ -481,12 +488,15 @@ Rules:
 2. Group by part of speech: definitions sharing a "pos" must be consecutive, never interleaved with another part of speech. Order the groups by how common that part of speech is for this word, and order senses within each group the same way — so the very first definition is still the most common sense overall.
 3. Each definition:
    - "pos": standard abbreviation (n., v., adj., adv., prep., conj., phrasal v., idiom, etc.)
-   - "en": clear, short English definition (under 15 words)
+   - "en": clear English definition, under 15 words. This is what the learner reads INSTEAD of the Chinese, so write it with everyday words — roughly the 2000 most common words in English. Never use the word being defined, and never explain it with a word harder than it.
    - "cn": natural Chinese equivalent; multiple options separated by 顿号 if needed
-4. Each definition gets exactly 1 example sentence:
+   - "register": exactly one of "neutral", "formal", "informal", "slang" — how this sense sounds to a native speaker
+4. Each definition gets exactly 2 example sentences:
    - Natural, conversational — Netflix/YouTube level, not textbook
+   - The two must show different situations, not one sentence reworded
    - Keep surrounding vocabulary simple (the example showcases THIS word)
    - No word limit — give it as much context as the sense needs to be unmistakable
+   - "target": the word or phrase exactly as it appears in that sentence, inflection included ("ran", "running", "pulled off"). It must match the sentence character for character, or the app cannot highlight it.
    - Add a fluent Chinese translation (not word-for-word)
 5. Provide both UK and US IPA in slashes.
 6. Output ONLY the JSON. No preamble or markdown fences.
@@ -500,13 +510,19 @@ Schema:
       "pos": "v.",
       "en": "...",
       "cn": "...",
-      "examples": [{ "en": "...", "cn": "..." }]
+      "register": "neutral",
+      "examples": [{ "en": "...", "cn": "...", "target": "..." }]
     }
   ]
 }
 
 Word: {WORD}
 ```
+
+`register` 和 `target` 是 schema 2 新增的字段（`WORD_CACHE_SCHEMA`）。两者都是可选的：
+`word_cache` 全体用户共享且永不过期，旧条目不会批量重生成——每次重生成都是一次付费调用。
+少了 `target` 时，`markTarget()`（`src/utils/highlight.ts`）用 lemma 及其词形变化去匹配例句，
+匹配不到就原样渲染，退化成改版前的样子。
 
 响应不含 `word` 字段——lemma 由前端 `lookupWord()` 自己填入 `WordCache`，不用模型回显（见 `src/api/lookup.ts`）。
 
@@ -533,7 +549,10 @@ Identify expressions across all three versions worth studying:
 - "idiom": e.g. "easier said than done", "on the same page"
 - "useful_word": uncommon but practical single words, e.g. "mitigate", "seamless" — NOT common words like "good", "make"
 
-For each span: "text" (exact text as it appears), "category", "version" ("casual" / "formal" / "idiomatic"). If a span appears in multiple versions, list it once in the most prominent one.
+For each span:
+- "text": the exact text as it appears in that version, character for character, so the app can highlight it
+- "category", and "version" ("casual" / "formal" / "idiomatic"). If a span appears in multiple versions, list it once in the most prominent one.
+- "note": one line of simple English — what it means here and where it belongs (under 20 words). The learner reads this instead of a Chinese gloss, so use everyday words. e.g. "finished after a struggle. Modest, and very common in speech."
 
 Output ONLY the JSON. No preamble or markdown fences.
 
@@ -543,7 +562,7 @@ Schema:
   "formal": "...",
   "idiomatic": "...",
   "idiomatic_note": null,
-  "spans": [{ "text": "pull off", "category": "phrasal_verb", "version": "idiomatic" }]
+  "spans": [{ "text": "pull off", "category": "phrasal_verb", "version": "idiomatic", "note": "..." }]
 }
 
 Chinese text: {TEXT}

@@ -62,12 +62,15 @@ firestore.rules     Firestore 安全规则（需 firebase deploy 部署）
 
 - 本地 IndexedDB 共 6 个 store：
   `word_cache`、`translation_cache`、`history`、`review_items`、`review_logs`、`settings`
-  （`settings` 目前只存同步标记 `bootstrapped:{uid}`，没有任何用户可配置项）
+  （`settings` 存同步标记 `bootstrapped:{uid}` 和显示偏好 `chinese_display`；本地专属，不参与同步）
 - Dexie schema 仍是 `version(1)`，从未迁移过。改 `.stores({...})` 必须新增 `this.version(2)`，原样保留 v1 那段——就地修改不会触发升级，老用户拿不到新 store/index
 - **前端不直接调用 LLM**：`callLLM` 把 `{ prompt, model }` POST 到 `VITE_PROXY_URL`，带上 Firebase ID token；由 Worker 去请求 DeepSeek 的 `/v1/chat/completions`
 - DeepSeek API key 只存在于 Worker secret（`DEEPSEEK_API_KEY`），永不下发前端；用户不需要也无法自行填写
 - 模型在 `getModel()` 里硬编码为 `deepseek-chat`；Settings 页面只有账号信息和退出登录，没有 LLM 配置 UI
 - **删除操作绝不级联到 `word_cache` / `translation_cache`**：这两个 collection 全体用户共享（见 `firestore.rules`），删一条会毁掉所有人的缓存并触发重新付费调用 LLM。删 history 只删 history 行，`review_items` 同理
+- **英文优先**：中文默认折叠，点"中文"才展开，由 `chinese_display`（`always` / `tap` / `never`，默认 `tap`）控制。查词页、翻译浮层、复习卡揭晓面共用 `SenseBlock`（`src/components/SenseBlock.tsx`）——释义的排版只有这一处
+- `word_cache` 带 `schema_version`（`WORD_CACHE_SCHEMA`，当前为 2）。给 prompt 加字段时把它 +1，且新字段必须可选：共享缓存里的旧条目不会批量重生成（每次都是付费调用），渲染必须能降级。`markTarget()`（`src/utils/highlight.ts`）就是这么处理缺 `target` 的老例句的
+- 多词短语整体查询：例句和译文里的 chunk 用 `.clickable-chunk` 标成一个整体，点 "pull off" 查的是短语而不是 "pull"。单个词仍可点，但不加任何装饰——每个词都画线，整段就没法读了
 - 环境变量：`VITE_FIREBASE_*` + `VITE_PROXY_URL`（本地开发写 `.env.local`）
 - 移动端优先（375px 基准宽度），桌面端居中显示，最大宽度 430px
 - 极简风格，单一点缀色琥珀橙 `#BA7517`

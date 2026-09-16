@@ -137,18 +137,17 @@ CtaBar（固定底部）
 
 ### DefinitionList
 
-每个释义块（DefinitionBlock）包含：
+每个释义块由 `SenseBlock`（`src/components/SenseBlock.tsx`）渲染，查词页、翻译浮层、复习卡揭晓面共用同一个组件（`size="full"` / `"compact"` 只改字号）：
 
-- 词性 pill：
-  - 文字：词性缩写（v. / n. / adj. 等），11px，斜体，`#854F0B`
-  - 背景：`#FAEEDA`，圆角 4px，内边距 1px 7px
-- 英文释义：13px，正常色，行高 1.45，margin-top 4px
-- 中文释义：13px，次要色，行高 1.45，margin-bottom 6px
-- 例句列表（1-2 条），每条 ExampleItem：
-  - 左侧：2px 竖线，三级边框色
-  - 英文行：12px，正常色，行高 1.5，斜体
-  - 中文行：12px，次要色，行高 1.5
-  - 竖线和文字间距：padding-left 8px
+- 首行：词性 pill + 语体标签 + 右侧操作槽（`action`，目前留空）
+  - 词性 pill：词性缩写（v. / n. / adj. 等），14px（compact 13px），斜体，`#854F0B`，背景 `#FAEEDA`，圆角 4px，内边距 1px 7px
+  - 语体标签：`register` 不是 `neutral` 时才显示（formal / informal / slang），14px，三级文字色
+- 英文释义：17px，正常色，行高 1.45，margin-top 4px —— 这是学习者真正要读的一行
+- 中文：默认不渲染。`chinese_display` 为 `tap`（默认）时，释义下方是一个 26px 高的"中文"chip（13px，三级色，0.5px 边框，圆角 8px），点开才展开中文释义和例句中文；`always` 直接展开且不出现 chip；`never` 完全不展示中文
+- 例句列表（schema 2 起每个义项 2 条），每条：
+  - 左侧：2px 竖线，三级边框色，与文字间距 8px（compact 6px）
+  - 英文行：16px（compact 14px），正常色，行高 1.5，斜体；句中的目标词用 600 字重 + 2px 底线标出（`markTarget()` 定位，缺 `target` 的老缓存回落到 lemma 匹配，匹配不到就不标）
+  - 中文行：同字号，次要色，跟着"中文"chip 一起显隐
 
 释义块之间：0.5px 三级边框分隔线，最后一块无分隔线。
 默认展示前 3 个释义。
@@ -203,10 +202,14 @@ CtaBar（固定底部）
     - 三个标签分别为："Casual" / "Formal" / "Idiomatic"
   - 右：`Plus` 图标（18px，三级色）；已加入后变为 `Check` 图标（琥珀橙）
 - 卡片正文：
-  - 14px，正常色，行高 1.5
-  - LLM 返回的 spans 字段中标记的文字添加可点击样式：
-    - 底部虚线下划线（`border-bottom: 1px dotted`，二级边框色）
-    - 点击触发 WordPopup（见屏幕 7）
+  - 18px，正常色，行高 1.6
+  - LLM 返回的 spans 中属于本版本的，整条短语标成一个可点单位（`.clickable-chunk`：二级背景、圆角 4px、内边距 1px 4px、2px 底线、`white-space: nowrap`）——点 "pull off" 查的是短语，不是 "pull"
+  - 其余单词照样可点（`.clickable-word`），但不加任何装饰
+  - 点击任一处触发 WordPopup（见屏幕 4）
+- 说明行（每个带 `note` 的 span 一行，紧跟正文）：
+  - 短语本身：正常色，weight 500；破折号后是一句简单英文，说明它在这里的意思和适用场合
+  - 14px，次要色，行高 1.5，margin-top 8px
+  - 老缓存里的 span 没有 `note`，此时只高亮、不出说明行
 - Idiomatic 卡片特殊情况：
   - 若 `idiomatic_note` 不为 null，在译文下方显示一行小字（11px，三级色）："No distinct idiomatic version available"
 
@@ -483,14 +486,27 @@ Body（padding 24px 18px，可滚动）
 
 ### SectionTitle
 
-- "账号"，14px，三级文字色，全大写 + 字母间距 0.5px，weight 500，margin-bottom 12px
+- "Account" / "Learning"，14px，三级文字色，全大写 + 字母间距 0.5px，weight 500，margin-bottom 12px
+- 界面文案统一用英文：这是一款英文优先的产品，设置页也不例外
 
 ### AccountRow
 
 - 二级背景色，圆角 10px，内边距 12px 14px，flex 两端对齐
 - 左：`User` 图标（16px，次要色）+ 当前登录邮箱（17px，正常色）
-- 右："退出"按钮 —— `LogOut` 图标（14px）+ 文字（17px，次要色），无背景无边框
+- 右："Sign out"按钮 —— `LogOut` 图标（14px）+ 文字（17px，次要色），无背景无边框
   - 点击：`logout()` 成功后 `navigate('/login', { replace: true })`
+
+### Learning：Chinese translation
+
+应用里第一个用户可配置项，写入 `settings` 的 `chinese_display`（本机偏好，不同步）。
+
+- 标题："Chinese translation"（17px，正常色）
+- 说明："English comes first everywhere. Tap 中文 on a sense when you are stuck."（14px，次要色，行高 1.5）
+- 三段分段控件（margin-top 12px）：
+  - 容器：二级背景色，圆角 10px，内边距 3px，`gap: 3px`
+  - 每段：flex 1，内边距 11px 0（约 44px 高，够得着），圆角 8px，16px
+  - 选中：背景 `#412402`（琥珀 900），白字 weight 500；未选中：透明背景，次要文字色
+  - 三个值：Always / On tap（默认）/ Never —— 对应释义里的中文始终展开、点开、完全不显示
 
 ### 没有 LLM 配置项
 

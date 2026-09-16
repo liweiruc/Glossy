@@ -252,6 +252,9 @@ export default function TranslateResult() {
               const text = version === 'casual' ? data.casual_en
                 : version === 'formal' ? data.formal_en
                 : data.idiomatic_en
+              // The model already picks out the expressions worth learning; show them as
+              // whole phrases so tapping "pull off" doesn't look up "pull".
+              const spans = (data.spans ?? []).filter(s => s.version === version)
               const vAdded = addedVersions.has(version)
               return (
                 <div key={version} style={{
@@ -279,9 +282,23 @@ export default function TranslateResult() {
                     </button>
                   </div>
 
-                  <div style={{ fontSize: 18, color: 'var(--text-primary)', lineHeight: 1.5 }}>
-                    <ClickableText text={text} onWordClick={onWordClick} />
+                  <div style={{ fontSize: 18, color: 'var(--text-primary)', lineHeight: 1.6 }}>
+                    <ClickableText
+                      text={text}
+                      onWordClick={onWordClick}
+                      chunks={spans.map(s => s.text)}
+                    />
                   </div>
+
+                  {spans.filter(s => s.note).map((s, i) => (
+                    <div key={i} style={{
+                      fontSize: 14, color: 'var(--text-secondary)',
+                      lineHeight: 1.5, marginTop: 8,
+                    }}>
+                      <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{s.text}</span>
+                      {' — '}{s.note}
+                    </div>
+                  ))}
 
                   {version === 'idiomatic' && data.idiomatic_note && (
                     <div style={{ fontSize: 14, color: 'var(--text-tertiary)', marginTop: 6 }}>

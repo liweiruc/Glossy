@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { X, Volume2, Plus, Check } from 'lucide-react'
 import { db } from '../db'
-import type { WordCache, WordSnapshot, Definition } from '../db'
+import type { WordCache, WordSnapshot } from '../db'
 import { lookupWord } from '../api/lookup'
 import { getErrorMessage } from '../api/llm'
 import { addReviewItem } from '../db/queries'
+import { useChineseDisplay } from '../db/settings'
 import { useToast } from './Toast'
+import SenseBlock from './SenseBlock'
 
 interface Props {
   word: string
@@ -16,6 +18,7 @@ interface Props {
 export default function WordPopup({ word, onClose }: Props) {
   const navigate = useNavigate()
   const { showToast } = useToast()
+  const chinese = useChineseDisplay()
   const [wordData, setWordData] = useState<WordCache | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -158,7 +161,15 @@ export default function WordPopup({ word, onClose }: Props) {
             {/* Definitions */}
             <div style={{ borderTop: '0.5px solid var(--border-tertiary)', marginTop: 10, paddingTop: 10 }}>
               {visibleDefs.map((def, i) => (
-                <MiniDef key={i} def={def} last={i === visibleDefs.length - 1} />
+                <div key={i} style={{ marginBottom: i === visibleDefs.length - 1 ? 0 : 10 }}>
+                  <SenseBlock
+                    def={def}
+                    lemma={wordData.lemma}
+                    chinese={chinese}
+                    size="compact"
+                    maxExamples={1}
+                  />
+                </div>
               ))}
             </div>
 
@@ -203,38 +214,5 @@ export default function WordPopup({ word, onClose }: Props) {
         )}
       </div>
     </>
-  )
-}
-
-function MiniDef({ def, last }: { def: Definition; last: boolean }) {
-  return (
-    <div style={{ marginBottom: last ? 0 : 10 }}>
-      <span style={{
-        fontSize: 13, fontStyle: 'italic',
-        color: 'var(--amber-700)', background: 'var(--amber-50)',
-        borderRadius: 4, padding: '1px 6px',
-      }}>
-        {def.pos}
-      </span>
-      <div style={{ fontSize: 17, color: 'var(--text-primary)', lineHeight: 1.4, marginTop: 3 }}>
-        {def.en}
-      </div>
-      <div style={{ fontSize: 17, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-        {def.cn}
-      </div>
-      {def.examples[0] && (
-        <div style={{ display: 'flex', marginTop: 4 }}>
-          <div style={{ width: 2, background: 'var(--border-tertiary)', borderRadius: 1, flexShrink: 0, marginRight: 6 }} />
-          <div>
-            <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.5, fontStyle: 'italic' }}>
-              {def.examples[0].en}
-            </div>
-            <div style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              {def.examples[0].cn}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
   )
 }

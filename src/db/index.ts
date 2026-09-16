@@ -1,5 +1,11 @@
 import Dexie, { type Table } from 'dexie'
 
+// Bumped when the lookup prompt starts producing fields the UI relies on. Entries
+// cached before a bump keep working — every v2 field is optional and has a fallback —
+// so nothing is regenerated wholesale: word_cache is shared by every user and each
+// regeneration is a paid call.
+export const WORD_CACHE_SCHEMA = 2
+
 export interface WordCache {
   lemma: string
   queried_form: string
@@ -9,18 +15,21 @@ export interface WordCache {
   audio_url_us?: string
   definitions: Definition[]
   created_at: number
+  schema_version?: number
 }
 
 export interface Definition {
   pos: string
   en: string
   cn: string
+  register?: string // neutral | formal | informal | slang — absent before schema 2
   examples: Example[]
 }
 
 export interface Example {
   en: string
   cn: string
+  target?: string // the word as it appears in this sentence — absent before schema 2
 }
 
 export interface TranslationCache {
@@ -38,6 +47,7 @@ export interface Span {
   text: string
   category: 'phrasal_verb' | 'idiom' | 'useful_word'
   version: 'casual' | 'formal' | 'idiomatic'
+  note?: string // one line of simple English — absent on translations cached earlier
 }
 
 export interface HistoryItem {

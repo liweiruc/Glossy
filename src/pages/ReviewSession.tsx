@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { X, Volume2, CheckCircle } from 'lucide-react'
 import type { ReviewItem, WordSnapshot, SentenceSnapshot } from '../db'
 import { getDueItems, updateItemAfterRating, addReviewLog } from '../db/queries'
+import { useChineseDisplay } from '../db/settings'
 import { applyRating, previewInterval } from '../algorithms/sm2'
 import type { Rating } from '../algorithms/sm2'
+import SenseBlock from '../components/SenseBlock'
 
 type Phase = 'loading' | 'front' | 'back' | 'done'
 
@@ -17,6 +19,7 @@ const RATINGS: { key: Rating; label: string; bg: string; color: string }[] = [
 
 export default function ReviewSession() {
   const navigate = useNavigate()
+  const chinese = useChineseDisplay()
   const [queue, setQueue] = useState<ReviewItem[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [phase, setPhase] = useState<Phase>('loading')
@@ -247,35 +250,12 @@ export default function ReviewSession() {
                       marginBottom: i < wordSnap.definitions.length - 1 ? 12 : 0,
                     }}
                   >
-                    <span style={{
-                      fontSize: 13, fontStyle: 'italic',
-                      color: '#854F0B', background: '#FAEEDA',
-                      borderRadius: 4, padding: '1px 7px',
-                    }}>
-                      {def.pos}
-                    </span>
-                    <div style={{ fontSize: 17, color: 'var(--text-primary)', lineHeight: 1.45, marginTop: 4 }}>
-                      {def.en}
-                    </div>
-                    <div style={{ fontSize: 17, color: 'var(--text-secondary)', lineHeight: 1.45, marginBottom: 6 }}>
-                      {def.cn}
-                    </div>
-                    {def.examples.map((ex, j) => (
-                      <div key={j} style={{ display: 'flex', marginTop: 4 }}>
-                        <div style={{
-                          width: 2, background: 'var(--border-tertiary)',
-                          borderRadius: 1, flexShrink: 0, marginRight: 8,
-                        }} />
-                        <div>
-                          <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.5, fontStyle: 'italic' }}>
-                            {ex.en}
-                          </div>
-                          <div style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                            {ex.cn}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                    <SenseBlock
+                      def={def}
+                      lemma={wordSnap.lemma}
+                      chinese={chinese}
+                      size="compact"
+                    />
                   </div>
                 ))}
               </div>

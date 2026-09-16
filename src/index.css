@@ -78,3 +78,24 @@ input::placeholder {
     background-color: var(--amber-50);
   }
 }
+
+/* A phrase that is looked up as one unit. Shaded so its extent is visible, which is
+   what tells the reader "pull off" is one word here, not two. */
+.clickable-chunk {
+  cursor: pointer;
+  background-color: var(--bg-secondary);
+  border-radius: 4px;
+  padding: 1px 4px;
+  border-bottom: 2px solid var(--border-primary);
+  white-space: nowrap;
+  transition: background-color 0.12s;
+  -webkit-tap-highlight-color: transparent;
+}
+.clickable-chunk:active {
+  background-color: var(--amber-50);
+}
+@media (hover: hover) {
+  .clickable-chunk:hover {
+    background-color: var(--amber-50);
+  }
+}

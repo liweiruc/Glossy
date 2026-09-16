@@ -15,7 +15,10 @@ Identify expressions across all three versions worth studying:
 - "idiom": e.g. "easier said than done", "on the same page"
 - "useful_word": uncommon but practical single words, e.g. "mitigate", "seamless" — NOT common words like "good", "make"
 
-For each span: "text" (exact text as it appears), "category", "version" ("casual" / "formal" / "idiomatic"). If a span appears in multiple versions, list it once in the most prominent one.
+For each span:
+- "text": the exact text as it appears in that version, character for character, so the app can highlight it
+- "category", and "version" ("casual" / "formal" / "idiomatic"). If a span appears in multiple versions, list it once in the most prominent one.
+- "note": one line of simple English — what it means here and where it belongs (under 20 words). The learner reads this instead of a Chinese gloss, so use everyday words. e.g. "finished after a struggle. Modest, and very common in speech."
 
 Output ONLY the JSON. No preamble or markdown fences.
 
@@ -25,7 +28,7 @@ Schema:
   "formal": "...",
   "idiomatic": "...",
   "idiomatic_note": null,
-  "spans": [{ "text": "pull off", "category": "phrasal_verb", "version": "idiomatic" }]
+  "spans": [{ "text": "pull off", "category": "phrasal_verb", "version": "idiomatic", "note": "..." }]
 }
 
 Chinese text: {TEXT}`

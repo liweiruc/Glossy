@@ -1,10 +1,19 @@
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, LogOut, User } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
+import { useChineseDisplay, setChineseDisplay } from '../db/settings'
+import type { ChineseDisplay } from '../db/settings'
+
+const CHINESE_OPTIONS: { value: ChineseDisplay; label: string }[] = [
+  { value: 'always', label: 'Always' },
+  { value: 'tap', label: 'On tap' },
+  { value: 'never', label: 'Never' },
+]
 
 export default function Settings() {
   const navigate = useNavigate()
   const { user, logout } = useAuth()
+  const chinese = useChineseDisplay()
 
   async function handleLogout() {
     await logout()
@@ -38,7 +47,7 @@ export default function Settings() {
           textTransform: 'uppercase', letterSpacing: '0.5px',
           fontWeight: 500, marginBottom: 12,
         }}>
-          账号
+          Account
         </div>
 
         <div style={{
@@ -61,8 +70,47 @@ export default function Settings() {
             }}
           >
             <LogOut size={14} />
-            退出
+            Sign out
           </button>
+        </div>
+
+        <div style={{
+          fontSize: 14, color: 'var(--text-tertiary)',
+          textTransform: 'uppercase', letterSpacing: '0.5px',
+          fontWeight: 500, margin: '28px 0 12px',
+        }}>
+          Learning
+        </div>
+
+        <div style={{ fontSize: 17, color: 'var(--text-primary)' }}>Chinese translation</div>
+        <div style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.5, marginTop: 4 }}>
+          English comes first everywhere. Tap 中文 on a sense when you are stuck.
+        </div>
+
+        <div style={{
+          display: 'flex', gap: 3,
+          background: 'var(--bg-secondary)', borderRadius: 10,
+          padding: 3, marginTop: 12,
+        }}>
+          {CHINESE_OPTIONS.map(({ value, label }) => {
+            const active = chinese === value
+            return (
+              <button
+                key={value}
+                onClick={() => setChineseDisplay(value)}
+                style={{
+                  flex: 1, padding: '11px 0',
+                  border: 'none', borderRadius: 8,
+                  background: active ? 'var(--amber-900)' : 'transparent',
+                  color: active ? '#fff' : 'var(--text-secondary)',
+                  fontSize: 16, fontWeight: active ? 500 : 400,
+                  cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >
+                {label}
+              </button>
+            )
+          })}
         </div>
       </div>
     </div>

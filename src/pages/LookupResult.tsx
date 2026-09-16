@@ -2,13 +2,14 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams, useLocation, useNavigate } from 'react-router-dom'
 import { ChevronLeft, MoreHorizontal, Volume2, Plus, Check } from 'lucide-react'
 import { db } from '../db'
-import type { WordCache, WordSnapshot, Definition } from '../db'
+import type { WordCache, WordSnapshot } from '../db'
 import { lookupWord, getCachedWord } from '../api/lookup'
 import { getErrorMessage } from '../api/llm'
 import { addReviewItem } from '../db/queries'
+import { useChineseDisplay } from '../db/settings'
 import { useToast } from '../components/Toast'
 import ErrorBanner from '../components/ErrorBanner'
-import ClickableText from '../components/ClickableText'
+import SenseBlock from '../components/SenseBlock'
 import WordPopup from '../components/WordPopup'
 
 export default function LookupResult() {
@@ -16,6 +17,7 @@ export default function LookupResult() {
   const location = useLocation()
   const navigate = useNavigate()
   const { showToast } = useToast()
+  const chinese = useChineseDisplay()
 
   const queriedForm = (location.state as { queriedForm?: string } | null)?.queriedForm
 
@@ -191,7 +193,12 @@ export default function LookupResult() {
             <div>
               {visibleDefs.map((def, i) => (
                 <div key={i}>
-                  <DefinitionBlock def={def} onWordClick={onWordClick} />
+                  <SenseBlock
+                    def={def}
+                    lemma={wordData.lemma}
+                    chinese={chinese}
+                    onWordClick={onWordClick}
+                  />
                   {i < visibleDefs.length - 1 && (
                     <div style={{ height: '0.5px', background: 'var(--border-tertiary)', margin: '10px 0' }} />
                   )}
@@ -278,40 +285,5 @@ function PhoneticItem({ label, phonetic, word, lang }: {
         <Volume2 size={14} color="var(--amber-600)" />
       </button>
     </span>
-  )
-}
-
-function DefinitionBlock({ def, onWordClick }: { def: Definition; onWordClick: (w: string) => void }) {
-  return (
-    <div style={{ paddingBottom: 4 }}>
-      <span style={{
-        display: 'inline-block',
-        fontSize: 14, fontStyle: 'italic',
-        color: 'var(--amber-700)',
-        background: 'var(--amber-50)',
-        borderRadius: 4, padding: '1px 7px',
-      }}>
-        {def.pos}
-      </span>
-      <div style={{ fontSize: 17, color: 'var(--text-primary)', lineHeight: 1.45, marginTop: 4 }}>
-        <ClickableText text={def.en} onWordClick={onWordClick} />
-      </div>
-      <div style={{ fontSize: 17, color: 'var(--text-secondary)', lineHeight: 1.45, marginBottom: 6 }}>
-        <ClickableText text={def.cn} onWordClick={onWordClick} />
-      </div>
-      {def.examples.map((ex, i) => (
-        <div key={i} style={{ display: 'flex', marginBottom: 6 }}>
-          <div style={{ width: 2, background: 'var(--border-tertiary)', borderRadius: 1, flexShrink: 0, marginRight: 8 }} />
-          <div>
-            <div style={{ fontSize: 16, color: 'var(--text-primary)', lineHeight: 1.5, fontStyle: 'italic' }}>
-              <ClickableText text={ex.en} onWordClick={onWordClick} />
-            </div>
-            <div style={{ fontSize: 16, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              <ClickableText text={ex.cn} onWordClick={onWordClick} />
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
   )
 }
