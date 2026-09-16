@@ -53,6 +53,8 @@ firestore.rules     Firestore 安全规则（需 firebase deploy 部署）
   - `snap.metadata.fromCache === false` — 离线快照来自本地缓存，误当权威会清空本地数据
   - 已 bootstrap — 首次登录时本地数据是「待上传」而非「已删除」，此时对账会删掉正要上传的数据
 - **共享缓存**（任意已登录用户可读写）：Firestore `word_cache`、`translation_cache`
+  - 共享缓存不会整体同步到本地：本地 `word_cache` / `translation_cache` 只有本设备查过或打开过的内容。所以从 History / 复习本 / 直接 URL 打开结果页、以及 History 的「+ add」，必须走 `getCachedWord` / `getCachedTranslation`（先 IndexedDB，再共享缓存；不调 LLM、不写 history）——只查 IndexedDB 的话，换一台设备就打不开同步过来的条目
+  - 翻译页刷新走 `generateTranslation`：直接调 LLM 并覆盖本地和共享缓存，全体用户都会看到新结果。走 `translateText` 会先命中共享缓存，永远拿回旧结果
 - **用户私有数据**（Firestore 路径 `users/{uid}/`）：`history`、`review_items`、`review_logs`
 - Firestore 使用 `persistentLocalCache` + `persistentMultipleTabManager`，离线写入自动排队并在上线后重试
 

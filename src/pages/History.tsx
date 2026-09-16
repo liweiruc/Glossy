@@ -5,7 +5,11 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db'
 import type { HistoryItem, WordSnapshot, SentenceSnapshot } from '../db'
 import { addReviewItem, deleteHistoryItem } from '../db/queries'
+import { getCachedWord } from '../api/lookup'
+import { getCachedTranslation } from '../api/translate'
+import { getErrorMessage } from '../api/llm'
 import { dayLabel } from '../utils/time'
+import { hashText } from '../utils/hash'
 import { useToast } from '../components/Toast'
 import BottomNav from '../components/BottomNav'
 import SwipeToDelete from '../components/SwipeToDelete'
@@ -39,30 +43,19 @@ export default function History() {
         .filter(r => r.type === 'word')
         .map(r => (r.snapshot as WordSnapshot).lemma)
     )
-    const addedSourceTexts = new Set(
+    // Sentences are matched by hash, which is what history.ref_key holds. Resolving
+    // hashes through translation_cache instead misses on a device that never ran the
+    // translation, showing "+ add" for sentences already in the review book.
+    const addedSourceHashes = new Set(await Promise.all(
       reviewItems
         .filter(r => r.type === 'sentence')
-        .map(r => (r.snapshot as SentenceSnapshot).source_text)
-    )
-
-    const transHashes = histItems.filter(i => i.type === 'translation').map(i => i.ref_key)
-    const transCaches = transHashes.length > 0
-      ? await db.translation_cache.bulkGet(transHashes)
-      : []
-
-    const hashToText = new Map<string, string>()
-    for (const c of transCaches) {
-      if (c) hashToText.set(c.source_hash, c.source_text)
-    }
+        .map(r => hashText((r.snapshot as SentenceSnapshot).source_text))
+    ))
 
     const added = new Set<string>()
     for (const item of histItems) {
-      if (item.type === 'word') {
-        if (addedLemmas.has(item.ref_key)) added.add(item.id)
-      } else {
-        const src = hashToText.get(item.ref_key)
-        if (src && addedSourceTexts.has(src)) added.add(item.id)
-      }
+      const addedKeys = item.type === 'word' ? addedLemmas : addedSourceHashes
+      if (addedKeys.has(item.ref_key)) added.add(item.id)
     }
 
     return { items: histItems, addedIds: added }
@@ -77,8 +70,11 @@ export default function History() {
     try {
       const now = Date.now()
       if (item.type === 'word') {
-        const wordCache = await db.word_cache.get(item.ref_key)
-        if (!wordCache) return
+        const wordCache = await getCachedWord(item.ref_key)
+        if (!wordCache) {
+          showToast('找不到这条记录的内容，请重新查询')
+          return
+        }
         await addReviewItem({
           id: crypto.randomUUID(),
           type: 'word',
@@ -96,8 +92,11 @@ export default function History() {
           last_reviewed_at: null,
         })
       } else {
-        const transCache = await db.translation_cache.get(item.ref_key)
-        if (!transCache) return
+        const transCache = await getCachedTranslation(item.ref_key)
+        if (!transCache) {
+          showToast('找不到这条记录的内容，请重新查询')
+          return
+        }
         await addReviewItem({
           id: crypto.randomUUID(),
           type: 'sentence',
@@ -116,6 +115,8 @@ export default function History() {
         })
       }
       showToast('已加入复习本')
+    } catch (err) {
+      showToast(getErrorMessage(err))
     } finally {
       setPendingIds(prev => {
         const next = new Set(prev)

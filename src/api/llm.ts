@@ -1,3 +1,4 @@
+import { FirestoreError } from 'firebase/firestore'
 import { firebaseAuth } from '../firebase'
 
 export type GlossyErrorCode = 'timeout' | 'server' | 'parse' | 'network' | 'unauthenticated'
@@ -21,6 +22,8 @@ const USER_MESSAGES: Record<GlossyErrorCode, string> = {
 
 export function getErrorMessage(err: unknown): string {
   if (err instanceof GlossyError) return USER_MESSAGES[err.code]
+  // A shared-cache read that can't reach the server and has no local copy to fall back on
+  if (err instanceof FirestoreError && err.code === 'unavailable') return USER_MESSAGES.network
   return '发生未知错误，请稍后重试'
 }
 

@@ -3,7 +3,7 @@ import { useParams, useLocation, useNavigate } from 'react-router-dom'
 import { ChevronLeft, RefreshCw, Plus, Check } from 'lucide-react'
 import { db } from '../db'
 import type { TranslationCache, SentenceSnapshot } from '../db'
-import { translateText } from '../api/translate'
+import { translateText, generateTranslation, getCachedTranslation } from '../api/translate'
 import { getErrorMessage } from '../api/llm'
 import { addReviewItem } from '../db/queries'
 import { useToast } from '../components/Toast'
@@ -31,6 +31,7 @@ export default function TranslateResult() {
   const [loadingData, setLoadingData] = useState(true)
   const [streaming, setStreaming] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [retryable, setRetryable] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [popupWord, setPopupWord] = useState<string | null>(null)
   const [retryKey, setRetryKey] = useState(0)
@@ -48,19 +49,20 @@ export default function TranslateResult() {
       setStreaming(false)
       setErrorMsg(null)
       try {
-        let result: TranslationCache | undefined
+        let result: TranslationCache | null
         if (sourceText) {
           // From Home translate: translateText handles cache check + LLM + history
           result = await translateText(sourceText, undefined, controller.signal, () => {
             if (!cancelled) setStreaming(true)
           })
         } else {
-          // From History / direct URL: load from cache only
-          result = await db.translation_cache.get(hash!) ?? undefined
+          // From History / Review / direct URL: both cache tiers, no LLM, no history
+          result = await getCachedTranslation(hash!)
         }
         if (cancelled) return
         if (!result) {
           setErrorMsg('Translation not found. Please go back and try again.')
+          setRetryable(false)
           return
         }
         setData(result)
@@ -85,6 +87,7 @@ export default function TranslateResult() {
         if (cancelled) return
         if (err instanceof DOMException && err.name === 'AbortError') return
         setErrorMsg(getErrorMessage(err))
+        setRetryable(true)
       } finally {
         if (!cancelled) setLoadingData(false)
       }
@@ -102,13 +105,13 @@ export default function TranslateResult() {
     setRefreshing(true)
     setErrorMsg(null)
     try {
-      await db.translation_cache.delete(hash!)
-      const result = await translateText(data.source_text)
+      const result = await generateTranslation(data.source_text)
+      // Added state is left alone: review cards match on source_text, which regenerating
+      // doesn't change, so resetting it would let the same sentence be added twice.
       setData(result)
-      setAddedVersions(new Set())
-      setAllAdded(false)
     } catch (err) {
       setErrorMsg(getErrorMessage(err))
+      setRetryable(true)
     } finally {
       setRefreshing(false)
     }
@@ -199,7 +202,7 @@ export default function TranslateResult() {
         <ErrorBanner
           message={errorMsg}
           onClose={() => setErrorMsg(null)}
-          onRetry={sourceText || data ? () => {
+          onRetry={retryable ? () => {
             if (data) handleRefresh()
             else setRetryKey(k => k + 1)
           } : undefined}

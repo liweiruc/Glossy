@@ -3,7 +3,7 @@ import { useParams, useLocation, useNavigate } from 'react-router-dom'
 import { ChevronLeft, MoreHorizontal, Volume2, Plus, Check } from 'lucide-react'
 import { db } from '../db'
 import type { WordCache, WordSnapshot, Definition } from '../db'
-import { lookupWord } from '../api/lookup'
+import { lookupWord, getCachedWord } from '../api/lookup'
 import { getErrorMessage } from '../api/llm'
 import { addReviewItem } from '../db/queries'
 import { useToast } from '../components/Toast'
@@ -23,6 +23,7 @@ export default function LookupResult() {
   const [loadingData, setLoadingData] = useState(true)
   const [streaming, setStreaming] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [retryable, setRetryable] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [isAdded, setIsAdded] = useState(false)
   const [retryKey, setRetryKey] = useState(0)
@@ -46,27 +47,29 @@ export default function LookupResult() {
       setStreaming(false)
       setErrorMsg(null)
       try {
-        let data: WordCache | undefined
+        let data: WordCache | null
         if (queriedForm) {
           // From Home search: lookupWord handles cache check + LLM + history recording
           data = await lookupWord(queriedForm, undefined, controller.signal, () => {
             if (!cancelled) setStreaming(true)
           })
         } else {
-          // From History / direct URL: load from cache only, no history recording
-          data = await db.word_cache.get(lemma!) ?? undefined
+          // From History / Review / direct URL: both cache tiers, no LLM, no history
+          data = await getCachedWord(lemma!)
         }
         if (!cancelled) {
           if (data) {
             setWordData(data)
           } else {
             setErrorMsg('Word data not found. Please go back and search again.')
+            setRetryable(false)
           }
         }
       } catch (err) {
         if (cancelled) return
         if (err instanceof DOMException && err.name === 'AbortError') return
         setErrorMsg(getErrorMessage(err))
+        setRetryable(true)
       } finally {
         if (!cancelled) setLoadingData(false)
       }
@@ -134,7 +137,7 @@ export default function LookupResult() {
         <ErrorBanner
           message={errorMsg}
           onClose={() => setErrorMsg(null)}
-          onRetry={queriedForm ? () => setRetryKey(k => k + 1) : undefined}
+          onRetry={retryable ? () => setRetryKey(k => k + 1) : undefined}
         />
       )}
 
