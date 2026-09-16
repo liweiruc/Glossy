@@ -112,7 +112,7 @@ StatusBar
 AppBar
   左：ChevronLeft（返回首页）
   中："Lookup"（14px 次要色 weight400）
-  右：MoreHorizontal 图标（预留，暂无功能）
+  右：RefreshCw 图标（重新生成词条：直接调 LLM 并覆盖本地和共享缓存，转动动画表示进行中）
 Body（padding 水平 18px，可滚动）
   WordHeader
   LemmaHint（仅变形词时显示）
@@ -139,7 +139,8 @@ CtaBar（固定底部）
 
 每个释义块由 `SenseBlock`（`src/components/SenseBlock.tsx`）渲染，查词页、翻译浮层、复习卡揭晓面共用同一个组件（`size="full"` / `"compact"` 只改字号）：
 
-- 首行：词性 pill + 语体标签 + 右侧操作槽（`action`，目前留空）
+- 首行：词性 pill + 语体标签 + 右侧操作槽（`action`）
+  - 查词页和浮层往 `action` 里放 `AddSenseButton`：18px 的 `Plus`（三级色），点击后变成琥珀色 `Check`；图标虽小，点击区域是 44px
   - 词性 pill：词性缩写（v. / n. / adj. 等），14px（compact 13px），斜体，`#854F0B`，背景 `#FAEEDA`，圆角 4px，内边距 1px 7px
   - 语体标签：`register` 不是 `neutral` 时才显示（formal / informal / slang），14px，三级文字色
 - 英文释义：17px，正常色，行高 1.45，margin-top 4px —— 这是学习者真正要读的一行
@@ -158,14 +159,15 @@ CtaBar（固定底部）
 - 文字："Show X more meanings"（X 为剩余数量），12px，琥珀橙
 - 居中，点击后展开全部，按钮消失
 
-### CtaBar（固定底部）
+### 确认条（固定底部，加入后才出现）
 
-- 顶部：0.5px 三级边框
-- 按钮"Add to review"：
-  - 全宽，圆角 10px，背景琥珀橙，白色文字，14px weight500
-  - 左侧 `Plus` 图标（14px）
-  - 点击后：写入 review_items，按钮变灰（二级背景色，次要文字色），文字改为"Added to review"，同时弹出 Toast"已加入复习本"
-  - 已加入状态下再次点击：无操作
+没有"整词加入"的主按钮——每条释义上的 `+` 就是操作本身，这一条是它的回执。
+
+- 顶部：0.5px 三级边框，内边距 10px 18px 14px
+- 左：`Check` 图标（16px，琥珀橙）
+- 中：第一行"Added to review"（17px，正常色）；第二行是刚加入的那个义项（14px，次要色，超出截断）
+- 右："Undo"（17px，琥珀橙，带 `Undo2` 图标）——删掉刚写入的那张卡，并把该义项的 `+` 恢复
+- 重新生成词条时这一条会消失：措辞变了，回执指的卡片也就对不上了
 
 ---
 
@@ -249,8 +251,9 @@ CtaBar（固定底部）
   - 显示前 2 个最常用释义（格式与屏幕 2 的 DefinitionBlock 相同，字号略小：英文 13px，中文 13px，例句 11px）
   - 若超过 2 个释义，不在浮层展示（引导用户点"Open full"查看）
 - **PopupActions**（顶部 0.5px 分隔线，margin-top 12px，flex 横排）：
-  - 主按钮"Add to review"：flex 1，琥珀橙背景，白色文字，13px weight500，左侧 `Plus` 图标（12px），圆角 8px，内边距 9px
-    - 已加入后变灰，文字改为"Added"
+  - 主按钮"Add first meaning"：flex 1，琥珀橙背景，白色文字，17px weight500，左侧 `Plus` 图标（12px），圆角 8px，内边距 9px
+    - 加的是第一个（最常用）义项；想要别的义项，用该义项行上的 `+`
+    - 第一个义项已加入后变灰，文字改为"Added"
   - 次按钮"Open full"：固定宽度，透明背景，0.5px 二级边框，12px 正常色，圆角 8px，内边距 9px 14px
     - 点击后：关闭浮层，导航到完整查词结果页（以该词为查询词）
 
@@ -298,8 +301,9 @@ BottomNav（Review 激活）
 
 - flex 横排，两端对齐，padding 10px 2px，底部 0.5px 三级分隔线
 - 左侧（Left）：
-  - 词或句子原文（14px，正常色），超出截断加省略号
-  - 下次复习时间（11px，三级色）：
+  - 词或句子原文（18px，正常色），超出截断加省略号
+  - 单词卡还有一行义项释义（14px，次要色，超出截断）——同一个词按义项可以出现多张卡，光看词头分不出是哪一张
+  - 下次复习时间（14px，三级色）：
     - 当天："due today"
     - 明天："due tomorrow"
     - N 天后："in N days"

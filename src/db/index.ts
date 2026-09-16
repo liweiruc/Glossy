@@ -70,11 +70,20 @@ export interface ReviewItem {
   last_reviewed_at: number | null
 }
 
+// A card teaches ONE sense, so "run" can sit in the review book several times — once per
+// meaning the learner actually met. `definitions` is the shape cards had before that
+// split; those keep rendering as they were rather than being migrated, since picking one
+// of their senses on the learner's behalf would silently drop the others.
 export interface WordSnapshot {
   lemma: string
   phonetic_uk: string
   phonetic_us: string
-  definitions: Definition[]
+  sense?: Definition
+  definitions?: Definition[]
+}
+
+export function snapshotSenses(snap: WordSnapshot): Definition[] {
+  return snap.sense ? [snap.sense] : snap.definitions ?? []
 }
 
 export interface SentenceSnapshot {

@@ -25,6 +25,34 @@ export async function getCachedWord(lemma: string): Promise<WordCache | null> {
   return shared
 }
 
+// Always calls the LLM, then overwrites both caches — the shared one included, so every
+// user gets the new entry. Regenerate must come here: lookupWord would hand back the
+// cached entry and never call the model.
+export async function generateWord(
+  lemma: string,
+  queriedForm: string = lemma,
+  signal?: AbortSignal,
+  onStream?: () => void,
+): Promise<WordCache> {
+  const model = await getModel('lookup')
+  const prompt = buildLookupPrompt(lemma)
+  const llmData = await callLLMStream<LLMWordResponse>(prompt, model, signal, onStream)
+
+  const result: WordCache = {
+    lemma,
+    queried_form: queriedForm,
+    phonetic_uk: llmData.phonetic_uk ?? '',
+    phonetic_us: llmData.phonetic_us ?? '',
+    definitions: llmData.definitions ?? [],
+    created_at: Date.now(),
+    schema_version: WORD_CACHE_SCHEMA,
+  }
+
+  await db.word_cache.put(result)
+  putWordToFirestore(result).catch(e => console.error('[Firestore sync]', e))
+  return result
+}
+
 export async function lookupWord(
   rawInput: string,
   onProgress?: (status: 'loading' | 'done') => void,
@@ -41,23 +69,8 @@ export async function lookupWord(
   if (!result) {
     // 3. LLM via proxy
     onProgress?.('loading')
-    const model = await getModel('lookup')
-    const prompt = buildLookupPrompt(lemma)
-    const llmData = await callLLMStream<LLMWordResponse>(prompt, model, signal, onStream)
+    result = await generateWord(lemma, queried, signal, onStream)
     onProgress?.('done')
-
-    result = {
-      lemma,
-      queried_form: queried,
-      phonetic_uk: llmData.phonetic_uk ?? '',
-      phonetic_us: llmData.phonetic_us ?? '',
-      definitions: llmData.definitions ?? [],
-      created_at: Date.now(),
-      schema_version: WORD_CACHE_SCHEMA,
-    }
-
-    await db.word_cache.put(result)
-    putWordToFirestore(result).catch(e => console.error('[Firestore sync]', e))
   }
 
   const historyItem = {

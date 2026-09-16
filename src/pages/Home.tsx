@@ -70,7 +70,7 @@ export default function Home() {
   async function handleDelete(id: string) {
     await deleteHistoryItem(id)
     setOpenId(null)
-    showToast('已从记录中删除')
+    showToast('Removed from history')
   }
 
   const canLookup = !!lookupQuery.trim()
@@ -177,7 +177,7 @@ export default function Home() {
                   handleTranslate()
                 }
               }}
-              placeholder="输入中文，获取地道英文翻译"
+              placeholder="Type Chinese for natural English"
               rows={3}
               style={{
                 width: '100%', border: 'none', background: 'transparent',

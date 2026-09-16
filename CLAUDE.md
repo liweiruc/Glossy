@@ -69,6 +69,8 @@ firestore.rules     Firestore 安全规则（需 firebase deploy 部署）
 - 模型在 `getModel()` 里硬编码为 `deepseek-chat`；Settings 页面只有账号信息和退出登录，没有 LLM 配置 UI
 - **删除操作绝不级联到 `word_cache` / `translation_cache`**：这两个 collection 全体用户共享（见 `firestore.rules`），删一条会毁掉所有人的缓存并触发重新付费调用 LLM。删 history 只删 history 行，`review_items` 同理
 - **英文优先**：中文默认折叠，点"中文"才展开，由 `chinese_display`（`always` / `tap` / `never`，默认 `tap`）控制。查词页、翻译浮层、复习卡揭晓面共用 `SenseBlock`（`src/components/SenseBlock.tsx`）——释义的排版只有这一处
+- **一张复习卡 = 一个义项**：`WordSnapshot.sense` 存单个 `Definition`，卡片身份是 `senseKey()`（词 + 释义原文）。拆分之前的老卡片带的是 `definitions: Definition[]`，**不迁移**——用 `snapshotSenses()` 读，两种形状都能渲染。新增入口：`addWordSense()`
+- 查词页右上角的重新生成走 `generateWord()`：直接调 LLM 并覆盖本地和共享缓存（全体用户可见）。`lookupWord()` 会先命中缓存，永远不会重新生成
 - `word_cache` 带 `schema_version`（`WORD_CACHE_SCHEMA`，当前为 2）。给 prompt 加字段时把它 +1，且新字段必须可选：共享缓存里的旧条目不会批量重生成（每次都是付费调用），渲染必须能降级。`markTarget()`（`src/utils/highlight.ts`）就是这么处理缺 `target` 的老例句的
 - 多词短语整体查询：例句和译文里的 chunk 用 `.clickable-chunk` 标成一个整体，点 "pull off" 查的是短语而不是 "pull"。单个词仍可点，但不加任何装饰——每个词都画线，整段就没法读了
 - 环境变量：`VITE_FIREBASE_*` + `VITE_PROXY_URL`（本地开发写 `.env.local`）

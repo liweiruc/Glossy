@@ -28,7 +28,7 @@ export default function ErrorBanner({ message, onClose, onRetry }: Props) {
             textDecoration: 'underline', flexShrink: 0, padding: '1px 0',
           }}
         >
-          重试
+          Retry
         </button>
       )}
       <button

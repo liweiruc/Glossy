@@ -272,16 +272,30 @@ spans 结构：
 | added_at | timestamp | 加入时间 |
 | last_reviewed_at | timestamp | 上次复习时间 |
 
-snapshot 结构（单词）：
+snapshot 结构（单词）：一张卡只教**一个义项**，所以 "run" 可以在复习本里出现好几次，
+每次对应用户真正遇到过的那个意思。
 
 ```json
 {
-  "lemma": "ephemeral",
-  "phonetic_uk": "/ɪˈfem.ər.əl/",
-  "phonetic_us": "/əˈfem.ər.əl/",
-  "definitions": [...]
+  "lemma": "run",
+  "phonetic_uk": "/rʌn/",
+  "phonetic_us": "/rʌn/",
+  "sense": {
+    "pos": "v.",
+    "en": "to be in charge of something and make it work",
+    "cn": "经营；管理",
+    "register": "neutral",
+    "examples": [...]
+  }
 }
 ```
+
+拆分义项之前加入的老卡片是 `{ lemma, phonetic_uk, phonetic_us, definitions: [...] }`，
+**不迁移**：替用户从多个义项里挑一个，等于悄悄丢掉其余的。`snapshotSenses()`
+（`src/db/index.ts`）统一返回 `sense ? [sense] : definitions`，两种形状都照常渲染。
+
+卡片身份是"词 + 该义项的英文释义原文"（`senseKey()`）。重新生成词条会改写释义措辞，
+改写后的义项算作新卡——已有的那张仍保留用户当初学的那套说法。
 
 snapshot 结构（句子）：
 
@@ -488,7 +502,7 @@ Rules:
 2. Group by part of speech: definitions sharing a "pos" must be consecutive, never interleaved with another part of speech. Order the groups by how common that part of speech is for this word, and order senses within each group the same way — so the very first definition is still the most common sense overall.
 3. Each definition:
    - "pos": standard abbreviation (n., v., adj., adv., prep., conj., phrasal v., idiom, etc.)
-   - "en": clear English definition, under 15 words. This is what the learner reads INSTEAD of the Chinese, so write it with everyday words — roughly the 2000 most common words in English. Never use the word being defined, and never explain it with a word harder than it.
+   - "en": clear English definition, under 15 words. This is what the learner reads INSTEAD of the Chinese, so lean on common words and everyday phrasing wherever you can. Never use the word being defined, and never explain it with a word harder than it.
    - "cn": natural Chinese equivalent; multiple options separated by 顿号 if needed
    - "register": exactly one of "neutral", "formal", "informal", "slang" — how this sense sounds to a native speaker
 4. Each definition gets exactly 2 example sentences:
@@ -770,6 +784,9 @@ async function fetchViaProxy(prompt, model, signal, onStream) {
 | 句子复习不强制输入英文 | 降低复习门槛，避免用户因负担而放弃 |
 | 释义和例句全部用 LLM 生成而非词典 API | 简化集成，统一风格，例句更生活化 |
 | 所有查词记录进 history，仅主动加入的进复习本 | 区分被动留痕与主动学习意图 |
+| 一张复习卡 = 一个义项 | 因为 "run a business" 查了 run，复习时却考 5 个不相干的义项——问题没有正确答案。加号落在每条释义上，卡片自然对应用户真正想记的那个意思 |
+| 老卡片保留 `definitions` 而不迁移 | 替用户挑一个义项等于悄悄丢掉其余的；两种形状同时渲染成本很低 |
+| 查词页的重新生成会覆盖共享缓存 | 词条一旦写坏或太单薄，对所有人都一样；这正是共享缓存的代价与好处 |
 | 缓存数据与复习本快照解耦 | 避免缓存更新影响用户当初看到的复习内容 |
 | Worker 内写死模型白名单 | 代理由项目方付费，不限制模型等于把账单敞开给任何登录用户 |
 | LLM 经 Worker 代理而非前端直连 | 密钥不下发浏览器；用户无需自备 key，产品可面向非技术用户 |

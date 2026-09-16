@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { X, Volume2, CheckCircle } from 'lucide-react'
+import { snapshotSenses } from '../db'
 import type { ReviewItem, WordSnapshot, SentenceSnapshot } from '../db'
 import { getDueItems, updateItemAfterRating, addReviewLog } from '../db/queries'
 import { useChineseDisplay } from '../db/settings'
@@ -241,13 +242,13 @@ export default function ReviewSession() {
                 </div>
               </div>
               <div style={{ padding: '0 18px' }}>
-                {wordSnap.definitions.map((def, i) => (
+                {snapshotSenses(wordSnap).map((def, i, senses) => (
                   <div
                     key={i}
                     style={{
                       paddingBottom: 12,
-                      borderBottom: i < wordSnap.definitions.length - 1 ? '0.5px solid var(--border-tertiary)' : 'none',
-                      marginBottom: i < wordSnap.definitions.length - 1 ? 12 : 0,
+                      borderBottom: i < senses.length - 1 ? '0.5px solid var(--border-tertiary)' : 'none',
+                      marginBottom: i < senses.length - 1 ? 12 : 0,
                     }}
                   >
                     <SenseBlock

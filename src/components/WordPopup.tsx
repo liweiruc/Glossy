@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { X, Volume2, Plus, Check } from 'lucide-react'
-import { db } from '../db'
-import type { WordCache, WordSnapshot } from '../db'
+import type { WordCache, Definition } from '../db'
 import { lookupWord } from '../api/lookup'
 import { getErrorMessage } from '../api/llm'
-import { addReviewItem } from '../db/queries'
+import { addWordSense, getAddedSenseKeys, senseKey } from '../db/queries'
 import { useChineseDisplay } from '../db/settings'
 import { useToast } from './Toast'
+import AddSenseButton from './AddSenseButton'
 import SenseBlock from './SenseBlock'
 
 interface Props {
@@ -22,7 +22,7 @@ export default function WordPopup({ word, onClose }: Props) {
   const [wordData, setWordData] = useState<WordCache | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [isAdded, setIsAdded] = useState(false)
+  const [addedKeys, setAddedKeys] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     setLoading(true)
@@ -32,36 +32,17 @@ export default function WordPopup({ word, onClose }: Props) {
     lookupWord(word)
       .then(async data => {
         setWordData(data)
-        const existing = await db.review_items
-          .filter(item => item.type === 'word' && (item.snapshot as WordSnapshot).lemma === data.lemma)
-          .first()
-        setIsAdded(!!existing)
+        setAddedKeys(await getAddedSenseKeys(data.lemma))
       })
       .catch(err => setError(getErrorMessage(err)))
       .finally(() => setLoading(false))
   }, [word])
 
-  async function handleAddToReview() {
-    if (!wordData || isAdded) return
-    const now = Date.now()
-    await addReviewItem({
-      id: crypto.randomUUID(),
-      type: 'word',
-      snapshot: {
-        lemma: wordData.lemma,
-        phonetic_uk: wordData.phonetic_uk,
-        phonetic_us: wordData.phonetic_us,
-        definitions: wordData.definitions,
-      } as WordSnapshot,
-      ease_factor: 2.5,
-      interval_days: 0,
-      repetitions: 0,
-      due_at: now,
-      added_at: now,
-      last_reviewed_at: null,
-    })
-    setIsAdded(true)
-    showToast('已加入复习本')
+  async function handleAddSense(sense: Definition) {
+    if (!wordData || addedKeys.has(senseKey(wordData.lemma, sense))) return
+    await addWordSense(wordData, sense)
+    setAddedKeys(prev => new Set([...prev, senseKey(wordData.lemma, sense)]))
+    showToast('Added to review')
   }
 
   function handleOpenFull() {
@@ -79,6 +60,8 @@ export default function WordPopup({ word, onClose }: Props) {
   }
 
   const visibleDefs = (wordData?.definitions ?? []).slice(0, 2)
+  const firstSense = visibleDefs[0]
+  const firstAdded = !!wordData && !!firstSense && addedKeys.has(senseKey(wordData.lemma, firstSense))
 
   return (
     <>
@@ -168,6 +151,12 @@ export default function WordPopup({ word, onClose }: Props) {
                     chinese={chinese}
                     size="compact"
                     maxExamples={1}
+                    action={
+                      <AddSenseButton
+                        added={addedKeys.has(senseKey(wordData.lemma, def))}
+                        onAdd={() => handleAddSense(def)}
+                      />
+                    }
                   />
                 </div>
               ))}
@@ -179,22 +168,24 @@ export default function WordPopup({ word, onClose }: Props) {
               borderTop: '0.5px solid var(--border-tertiary)',
               marginTop: 12, paddingTop: 12,
             }}>
+              {/* The + on each sense is the precise action; this adds the first sense,
+                  which is the most common one and what a hurried tap means. */}
               <button
-                onClick={handleAddToReview}
-                disabled={isAdded}
+                onClick={() => firstSense && handleAddSense(firstSense)}
+                disabled={!firstSense || firstAdded}
                 style={{
                   flex: 1,
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                  background: isAdded ? 'var(--bg-secondary)' : 'var(--amber-600)',
-                  color: isAdded ? 'var(--text-secondary)' : '#fff',
+                  background: firstAdded ? 'var(--bg-secondary)' : 'var(--amber-600)',
+                  color: firstAdded ? 'var(--text-secondary)' : '#fff',
                   border: 'none', borderRadius: 8, padding: '9px 0',
                   fontSize: 17, fontWeight: 500,
-                  cursor: isAdded ? 'default' : 'pointer',
+                  cursor: firstAdded ? 'default' : 'pointer',
                   fontFamily: 'inherit',
                 }}
               >
-                {isAdded ? <Check size={12} /> : <Plus size={12} />}
-                {isAdded ? 'Added' : 'Add to review'}
+                {firstAdded ? <Check size={12} /> : <Plus size={12} />}
+                {firstAdded ? 'Added' : 'Add first meaning'}
               </button>
               <button
                 onClick={handleOpenFull}

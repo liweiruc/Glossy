@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from '../db'
+import { db, snapshotSenses } from '../db'
 import type { ReviewItem, WordSnapshot, SentenceSnapshot } from '../db'
 import { deleteReviewItem } from '../db/queries'
 import { dueLabel, startOfTomorrow } from '../utils/time'
@@ -29,7 +29,7 @@ export default function ReviewBook() {
   async function handleDelete(id: string) {
     await deleteReviewItem(id)
     setOpenId(null)
-    showToast('已从复习本移除')
+    showToast('Removed from review')
   }
 
   async function handleRowClick(item: ReviewItem) {
@@ -129,6 +129,10 @@ export default function ReviewBook() {
           const label = item.type === 'word'
             ? (item.snapshot as WordSnapshot).lemma
             : (item.snapshot as SentenceSnapshot).source_text
+          // Which meaning this card teaches — "run" can sit here several times over.
+          const sense = item.type === 'word'
+            ? snapshotSenses(item.snapshot as WordSnapshot)[0]?.en
+            : null
           const lit = Math.min(item.repetitions, 5)
           const due = dueLabel(item.due_at)
 
@@ -158,6 +162,14 @@ export default function ReviewBook() {
                   }}>
                     {label}
                   </div>
+                  {sense && (
+                    <div style={{
+                      fontSize: 14, marginTop: 2, color: 'var(--text-secondary)',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {sense}
+                    </div>
+                  )}
                   <div style={{
                     fontSize: 14, marginTop: 2,
                     color: due === 'overdue' ? '#dc2626' : 'var(--text-tertiary)',

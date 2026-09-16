@@ -138,7 +138,7 @@ export default function TranslateResult() {
       last_reviewed_at: null,
     })
     setAddedVersions(prev => new Set([...prev, version]))
-    showToast('已加入复习本')
+    showToast('Added to review')
   }
 
   async function handleAddAll() {
@@ -161,7 +161,7 @@ export default function TranslateResult() {
       last_reviewed_at: null,
     })
     setAllAdded(true)
-    showToast('已加入复习本')
+    showToast('Added to review')
   }
 
   const onWordClick = useCallback((word: string) => setPopupWord(word), [])
@@ -224,7 +224,7 @@ export default function TranslateResult() {
               }} />
             )}
             <span style={{ fontSize: 18, color: 'var(--text-secondary)' }}>
-              {streaming ? 'AI 正在回复...' : '正在翻译...'}
+              {streaming ? 'Writing the translation…' : 'Translating…'}
             </span>
           </div>
         )}

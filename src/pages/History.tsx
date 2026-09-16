@@ -4,7 +4,7 @@ import { Clock } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db'
 import type { HistoryItem, WordSnapshot, SentenceSnapshot } from '../db'
-import { addReviewItem, deleteHistoryItem } from '../db/queries'
+import { addReviewItem, addWordSense, deleteHistoryItem } from '../db/queries'
 import { getCachedWord } from '../api/lookup'
 import { getCachedTranslation } from '../api/translate'
 import { getErrorMessage } from '../api/llm'
@@ -71,30 +71,18 @@ export default function History() {
       const now = Date.now()
       if (item.type === 'word') {
         const wordCache = await getCachedWord(item.ref_key)
-        if (!wordCache) {
-          showToast('找不到这条记录的内容，请重新查询')
+        // A row carries no sense of its own, so it adds the most common one. Pick a
+        // different meaning by opening the word and using the + on that sense.
+        const sense = wordCache?.definitions[0]
+        if (!wordCache || !sense) {
+          showToast("Could not find this entry — look it up again")
           return
         }
-        await addReviewItem({
-          id: crypto.randomUUID(),
-          type: 'word',
-          snapshot: {
-            lemma: wordCache.lemma,
-            phonetic_uk: wordCache.phonetic_uk,
-            phonetic_us: wordCache.phonetic_us,
-            definitions: wordCache.definitions,
-          } as WordSnapshot,
-          ease_factor: 2.5,
-          interval_days: 0,
-          repetitions: 0,
-          due_at: now,
-          added_at: now,
-          last_reviewed_at: null,
-        })
+        await addWordSense(wordCache, sense)
       } else {
         const transCache = await getCachedTranslation(item.ref_key)
         if (!transCache) {
-          showToast('找不到这条记录的内容，请重新查询')
+          showToast("Could not find this entry — look it up again")
           return
         }
         await addReviewItem({
@@ -114,7 +102,7 @@ export default function History() {
           last_reviewed_at: null,
         })
       }
-      showToast('已加入复习本')
+      showToast('Added to review')
     } catch (err) {
       showToast(getErrorMessage(err))
     } finally {
@@ -129,7 +117,7 @@ export default function History() {
   async function handleDelete(id: string) {
     await deleteHistoryItem(id)
     setOpenId(null)
-    showToast('已从记录中删除')
+    showToast('Removed from history')
   }
 
   // Group items by calendar day, preserving newest-first order
@@ -163,7 +151,7 @@ export default function History() {
             marginTop: 80, gap: 12,
           }}>
             <Clock size={40} color="var(--text-tertiary)" />
-            <div style={{ fontSize: 18, color: 'var(--text-secondary)' }}>还没有查询记录</div>
+            <div style={{ fontSize: 18, color: 'var(--text-secondary)' }}>Nothing looked up yet</div>
           </div>
         )}
 

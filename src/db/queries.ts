@@ -1,5 +1,7 @@
-import { db } from './index'
-import type { ReviewItem, ReviewLog, HistoryItem, WordSnapshot, SentenceSnapshot } from './index'
+import { db, snapshotSenses } from './index'
+import type {
+  ReviewItem, ReviewLog, HistoryItem, WordSnapshot, SentenceSnapshot, Definition, WordCache,
+} from './index'
 import type { SM2Result } from '../algorithms/sm2'
 import { firebaseAuth } from '../firebase'
 import { startOfTomorrow } from '../utils/time'
@@ -51,6 +53,55 @@ export async function addReviewItem(item: ReviewItem): Promise<void> {
   await db.review_items.add(item)
   const u = uid()
   if (u) pushReviewItem(u, item).catch(e => console.error('[Firestore sync]', e))
+}
+
+// A card is one sense of one word, so identity is the word plus that sense's wording.
+// Regenerating an entry rewords its senses, and a reworded sense counts as a new card —
+// the existing one keeps the wording the learner actually studied.
+export function senseKey(lemma: string, def: Pick<Definition, 'pos' | 'en'>): string {
+  return `${lemma}::${def.pos}::${def.en}`
+}
+
+// Which senses of this word are already in the review book. A card from before the
+// per-sense split covers every sense it holds, so it contributes one key per definition.
+export async function getAddedSenseKeys(lemma: string): Promise<Set<string>> {
+  const items = await db.review_items
+    .filter(r => r.type === 'word' && (r.snapshot as WordSnapshot).lemma === lemma)
+    .toArray()
+
+  const keys = new Set<string>()
+  for (const item of items) {
+    for (const def of snapshotSenses(item.snapshot as WordSnapshot)) {
+      keys.add(senseKey(lemma, def))
+    }
+  }
+  return keys
+}
+
+// Adds one sense as its own card. Returns the id so the caller can offer an undo.
+export async function addWordSense(
+  word: Pick<WordCache, 'lemma' | 'phonetic_uk' | 'phonetic_us'>,
+  sense: Definition,
+): Promise<string> {
+  const now = Date.now()
+  const id = crypto.randomUUID()
+  await addReviewItem({
+    id,
+    type: 'word',
+    snapshot: {
+      lemma: word.lemma,
+      phonetic_uk: word.phonetic_uk,
+      phonetic_us: word.phonetic_us,
+      sense,
+    },
+    ease_factor: 2.5,
+    interval_days: 0,
+    repetitions: 0,
+    due_at: now,
+    added_at: now,
+    last_reviewed_at: null,
+  })
+  return id
 }
 
 export async function deleteReviewItem(id: string): Promise<void> {

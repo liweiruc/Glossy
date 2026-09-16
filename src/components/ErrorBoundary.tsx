@@ -18,10 +18,10 @@ export default class ErrorBoundary extends React.Component<React.PropsWithChildr
           height: '100dvh', padding: '0 32px', textAlign: 'center', gap: 10,
         }}>
           <div style={{ fontSize: 20, fontWeight: 500, color: 'var(--text-primary)' }}>
-            出了点问题
+            Something went wrong
           </div>
           <div style={{ fontSize: 17, color: 'var(--text-secondary)' }}>
-            请刷新页面重试
+            Reload the page to try again
           </div>
           <button
             onClick={() => window.location.reload()}
@@ -33,7 +33,7 @@ export default class ErrorBoundary extends React.Component<React.PropsWithChildr
               cursor: 'pointer', fontFamily: 'inherit',
             }}
           >
-            刷新页面
+            Reload
           </button>
         </div>
       )

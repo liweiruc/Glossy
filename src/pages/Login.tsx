@@ -18,7 +18,7 @@ export default function Login() {
       await login(email, password)
       navigate('/', { replace: true })
     } catch {
-      setError('邮箱或密码不正确')
+      setError('That email or password is not right')
     } finally {
       setLoading(false)
     }
@@ -36,7 +36,7 @@ export default function Login() {
             Glossy
           </div>
           <div style={{ marginTop: 6, fontSize: 17, color: 'var(--text-secondary)' }}>
-            登录继续
+            Sign in to continue
           </div>
         </div>
 
@@ -45,7 +45,7 @@ export default function Login() {
             id="email"
             name="email"
             type="email"
-            placeholder="邮箱"
+            placeholder="Email"
             value={email}
             onChange={e => setEmail(e.target.value)}
             required
@@ -56,7 +56,7 @@ export default function Login() {
             id="password"
             name="password"
             type="password"
-            placeholder="密码"
+            placeholder="Password"
             value={password}
             onChange={e => setPassword(e.target.value)}
             required
@@ -73,14 +73,14 @@ export default function Login() {
             disabled={loading}
             style={btnStyle(loading)}
           >
-            {loading ? '登录中…' : '登录'}
+            {loading ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
 
         <div style={{ marginTop: 20, textAlign: 'center', fontSize: 17, color: 'var(--text-secondary)' }}>
-          还没有账号？{' '}
+          No account yet? {' '}
           <Link to="/register" style={{ color: 'var(--amber-600)', textDecoration: 'none' }}>
-            注册
+            Sign up
           </Link>
         </div>
       </div>

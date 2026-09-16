@@ -4,10 +4,10 @@ import { useAuth } from '../auth/AuthContext'
 
 function mapFirebaseError(err: unknown): string {
   const code = (err as { code?: string })?.code ?? ''
-  if (code === 'auth/email-already-in-use') return '该邮箱已被注册'
-  if (code === 'auth/weak-password') return '密码至少需要 6 位'
-  if (code === 'auth/invalid-email') return '邮箱格式不正确'
-  return '注册失败，请稍后重试'
+  if (code === 'auth/email-already-in-use') return 'That email is already registered'
+  if (code === 'auth/weak-password') return 'Password needs at least 6 characters'
+  if (code === 'auth/invalid-email') return 'That email address is not valid'
+  return 'Sign-up failed. Try again.'
 }
 
 export default function Register() {
@@ -23,7 +23,7 @@ export default function Register() {
     e.preventDefault()
     setError('')
     if (password !== confirm) {
-      setError('两次输入的密码不一致')
+      setError('The two passwords do not match')
       return
     }
     setLoading(true)
@@ -49,7 +49,7 @@ export default function Register() {
             Glossy
           </div>
           <div style={{ marginTop: 6, fontSize: 17, color: 'var(--text-secondary)' }}>
-            创建账号
+            Create your account
           </div>
         </div>
 
@@ -58,7 +58,7 @@ export default function Register() {
             id="email"
             name="email"
             type="email"
-            placeholder="邮箱"
+            placeholder="Email"
             value={email}
             onChange={e => setEmail(e.target.value)}
             required
@@ -69,7 +69,7 @@ export default function Register() {
             id="password"
             name="password"
             type="password"
-            placeholder="密码（至少 6 位）"
+            placeholder="Password (6+ characters)"
             value={password}
             onChange={e => setPassword(e.target.value)}
             required
@@ -80,7 +80,7 @@ export default function Register() {
             id="confirm-password"
             name="confirm-password"
             type="password"
-            placeholder="确认密码"
+            placeholder="Confirm password"
             value={confirm}
             onChange={e => setConfirm(e.target.value)}
             required
@@ -97,14 +97,14 @@ export default function Register() {
             disabled={loading}
             style={btnStyle(loading)}
           >
-            {loading ? '注册中…' : '注册'}
+            {loading ? 'Signing up…' : 'Sign up'}
           </button>
         </form>
 
         <div style={{ marginTop: 20, textAlign: 'center', fontSize: 17, color: 'var(--text-secondary)' }}>
-          已有账号？{' '}
+          Already have an account? {' '}
           <Link to="/login" style={{ color: 'var(--amber-600)', textDecoration: 'none' }}>
-            登录
+            Sign in
           </Link>
         </div>
       </div>

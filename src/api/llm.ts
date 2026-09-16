@@ -13,18 +13,18 @@ export class GlossyError extends Error {
 }
 
 const USER_MESSAGES: Record<GlossyErrorCode, string> = {
-  timeout: '网络连接超时，请检查网络后重试',
-  server: 'AI 模型服务暂时不可用，请稍后重试',
-  parse: 'AI 模型返回格式异常，请稍后重试',
-  network: '当前无网络连接，无法获取新内容',
-  unauthenticated: '请先登录后再使用',
+  timeout: 'The request timed out. Check your connection and try again.',
+  server: 'The model service is unavailable right now. Try again shortly.',
+  parse: 'The model sent back something unreadable. Try again.',
+  network: "You are offline, so nothing new can be fetched.",
+  unauthenticated: 'Sign in first.',
 }
 
 export function getErrorMessage(err: unknown): string {
   if (err instanceof GlossyError) return USER_MESSAGES[err.code]
   // A shared-cache read that can't reach the server and has no local copy to fall back on
   if (err instanceof FirestoreError && err.code === 'unavailable') return USER_MESSAGES.network
-  return '发生未知错误，请稍后重试'
+  return 'Something went wrong. Try again.'
 }
 
 function stripMarkdown(text: string): string {

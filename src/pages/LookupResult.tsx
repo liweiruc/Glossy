@@ -1,13 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useLocation, useNavigate } from 'react-router-dom'
-import { ChevronLeft, MoreHorizontal, Volume2, Plus, Check } from 'lucide-react'
-import { db } from '../db'
-import type { WordCache, WordSnapshot } from '../db'
-import { lookupWord, getCachedWord } from '../api/lookup'
+import { ChevronLeft, RefreshCw, Volume2, Check, Undo2 } from 'lucide-react'
+import type { WordCache, Definition } from '../db'
+import { lookupWord, getCachedWord, generateWord } from '../api/lookup'
 import { getErrorMessage } from '../api/llm'
-import { addReviewItem } from '../db/queries'
+import { addWordSense, deleteReviewItem, getAddedSenseKeys, senseKey } from '../db/queries'
 import { useChineseDisplay } from '../db/settings'
-import { useToast } from '../components/Toast'
+import AddSenseButton from '../components/AddSenseButton'
 import ErrorBanner from '../components/ErrorBanner'
 import SenseBlock from '../components/SenseBlock'
 import WordPopup from '../components/WordPopup'
@@ -16,7 +15,6 @@ export default function LookupResult() {
   const { lemma } = useParams<{ lemma: string }>()
   const location = useLocation()
   const navigate = useNavigate()
-  const { showToast } = useToast()
   const chinese = useChineseDisplay()
 
   const queriedForm = (location.state as { queriedForm?: string } | null)?.queriedForm
@@ -27,7 +25,9 @@ export default function LookupResult() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [retryable, setRetryable] = useState(false)
   const [expanded, setExpanded] = useState(false)
-  const [isAdded, setIsAdded] = useState(false)
+  const [addedKeys, setAddedKeys] = useState<Set<string>>(new Set())
+  const [lastAdded, setLastAdded] = useState<{ id: string; sense: Definition } | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
   const [retryKey, setRetryKey] = useState(0)
   const [popupWord, setPopupWord] = useState<string | null>(null)
 
@@ -36,11 +36,8 @@ export default function LookupResult() {
   useEffect(() => {
     if (!lemma) return
 
-    // Check review status independently (fast, always from cache)
-    db.review_items
-      .filter(item => item.type === 'word' && (item.snapshot as WordSnapshot).lemma === lemma)
-      .first()
-      .then(existing => setIsAdded(!!existing))
+    // Which senses are already cards (fast, always from cache)
+    getAddedSenseKeys(lemma).then(setAddedKeys)
 
     const controller = new AbortController()
     let cancelled = false
@@ -84,27 +81,42 @@ export default function LookupResult() {
     }
   }, [lemma, retryKey])
 
-  async function handleAddToReview() {
-    if (!wordData || isAdded) return
-    const now = Date.now()
-    await addReviewItem({
-      id: crypto.randomUUID(),
-      type: 'word',
-      snapshot: {
-        lemma: wordData.lemma,
-        phonetic_uk: wordData.phonetic_uk,
-        phonetic_us: wordData.phonetic_us,
-        definitions: wordData.definitions,
-      } as WordSnapshot,
-      ease_factor: 2.5,
-      interval_days: 0,
-      repetitions: 0,
-      due_at: now,
-      added_at: now,
-      last_reviewed_at: null,
+  async function handleAddSense(sense: Definition) {
+    if (!wordData || addedKeys.has(senseKey(wordData.lemma, sense))) return
+    const id = await addWordSense(wordData, sense)
+    setAddedKeys(prev => new Set([...prev, senseKey(wordData.lemma, sense)]))
+    setLastAdded({ id, sense })
+  }
+
+  async function handleUndoAdd() {
+    if (!wordData || !lastAdded) return
+    await deleteReviewItem(lastAdded.id)
+    setAddedKeys(prev => {
+      const next = new Set(prev)
+      next.delete(senseKey(wordData.lemma, lastAdded.sense))
+      return next
     })
-    setIsAdded(true)
-    showToast('已加入复习本')
+    setLastAdded(null)
+  }
+
+  // Overwrites the shared cache, so everyone gets the new entry — the point of the
+  // button is that the old one was wrong or thin for every learner, not just this one.
+  async function handleRegenerate() {
+    if (!wordData || refreshing) return
+    setRefreshing(true)
+    setErrorMsg(null)
+    setLastAdded(null)
+    try {
+      const fresh = await generateWord(wordData.lemma)
+      setWordData(fresh)
+      // Cards keep the wording they were added with, so a reworded sense reads as new.
+      setAddedKeys(await getAddedSenseKeys(fresh.lemma))
+    } catch (err) {
+      setErrorMsg(getErrorMessage(err))
+      setRetryable(true)
+    } finally {
+      setRefreshing(false)
+    }
   }
 
   const showHint = queriedForm && lemma && queriedForm.toLowerCase() !== lemma.toLowerCase()
@@ -129,8 +141,17 @@ export default function LookupResult() {
         <span style={{ flex: 1, textAlign: 'center', fontSize: 18, color: 'var(--text-secondary)', fontWeight: 400 }}>
           Lookup
         </span>
-        <button style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' }}>
-          <MoreHorizontal size={20} color="var(--text-tertiary)" />
+        <button
+          onClick={handleRegenerate}
+          disabled={refreshing || !wordData}
+          title="Ask the model for this entry again"
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' }}
+        >
+          <RefreshCw
+            size={18}
+            color="var(--text-secondary)"
+            style={{ animation: refreshing ? 'spin 0.8s linear infinite' : 'none' }}
+          />
         </button>
       </div>
 
@@ -139,7 +160,10 @@ export default function LookupResult() {
         <ErrorBanner
           message={errorMsg}
           onClose={() => setErrorMsg(null)}
-          onRetry={retryable ? () => setRetryKey(k => k + 1) : undefined}
+          onRetry={retryable ? () => {
+            if (wordData) handleRegenerate()
+            else setRetryKey(k => k + 1)
+          } : undefined}
         />
       )}
 
@@ -158,7 +182,7 @@ export default function LookupResult() {
               }} />
             )}
             <span style={{ fontSize: 18, color: 'var(--text-secondary)' }}>
-              {streaming ? 'AI 正在回复...' : `正在查询 ${lemma}...`}
+              {streaming ? 'Writing the entry…' : `Looking up ${lemma}…`}
             </span>
           </div>
         )}
@@ -198,6 +222,12 @@ export default function LookupResult() {
                     lemma={wordData.lemma}
                     chinese={chinese}
                     onWordClick={onWordClick}
+                    action={
+                      <AddSenseButton
+                        added={addedKeys.has(senseKey(wordData.lemma, def))}
+                        onAdd={() => handleAddSense(def)}
+                      />
+                    }
                   />
                   {i < visibleDefs.length - 1 && (
                     <div style={{ height: '0.5px', background: 'var(--border-tertiary)', margin: '10px 0' }} />
@@ -226,32 +256,36 @@ export default function LookupResult() {
         )}
       </div>
 
-      {/* CtaBar */}
-      {wordData && (
+      {/* Confirmation bar — the + on each sense is the action; this is its receipt */}
+      {lastAdded && (
         <div style={{
           borderTop: '0.5px solid var(--border-tertiary)',
           padding: '10px 18px 14px',
           flexShrink: 0,
           background: 'var(--bg-primary)',
+          display: 'flex', alignItems: 'center', gap: 10,
         }}>
+          <Check size={16} color="var(--amber-600)" style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 17, color: 'var(--text-primary)' }}>Added to review</div>
+            <div style={{
+              fontSize: 14, color: 'var(--text-secondary)',
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}>
+              {lastAdded.sense.pos} {lastAdded.sense.en}
+            </div>
+          </div>
           <button
-            onClick={handleAddToReview}
-            disabled={isAdded}
+            onClick={handleUndoAdd}
             style={{
-              width: '100%',
-              background: isAdded ? 'var(--bg-secondary)' : 'var(--amber-600)',
-              color: isAdded ? 'var(--text-secondary)' : '#fff',
-              border: 'none', borderRadius: 10,
-              padding: '12px 0',
-              fontSize: 18, fontWeight: 500,
-              cursor: isAdded ? 'default' : 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              fontFamily: 'inherit',
-              transition: 'background 0.2s, color 0.2s',
+              background: 'none', border: 'none', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 4,
+              fontSize: 17, color: 'var(--amber-600)', fontFamily: 'inherit',
+              flexShrink: 0, padding: '4px 0',
             }}
           >
-            {isAdded ? <Check size={14} /> : <Plus size={14} />}
-            {isAdded ? 'Added to review' : 'Add to review'}
+            <Undo2 size={14} />
+            Undo
           </button>
         </div>
       )}
