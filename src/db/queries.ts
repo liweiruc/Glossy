@@ -2,6 +2,7 @@ import { db } from './index'
 import type { ReviewItem, ReviewLog, HistoryItem, WordSnapshot, SentenceSnapshot } from './index'
 import type { SM2Result } from '../algorithms/sm2'
 import { firebaseAuth } from '../firebase'
+import { startOfTomorrow } from '../utils/time'
 import {
   pushReviewItem,
   updateReviewItemInFirestore,
@@ -15,11 +16,11 @@ function uid(): string | null {
 }
 
 export async function getDueItems(): Promise<ReviewItem[]> {
-  return db.review_items.where('due_at').belowOrEqual(Date.now()).toArray()
+  return db.review_items.where('due_at').below(startOfTomorrow()).toArray()
 }
 
 export async function getDueCount(): Promise<number> {
-  return db.review_items.where('due_at').belowOrEqual(Date.now()).count()
+  return db.review_items.where('due_at').below(startOfTomorrow()).count()
 }
 
 export async function getReviewItems(): Promise<ReviewItem[]> {

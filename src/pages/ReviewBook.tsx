@@ -4,7 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db'
 import type { ReviewItem, WordSnapshot, SentenceSnapshot } from '../db'
 import { deleteReviewItem } from '../db/queries'
-import { dueLabel } from '../utils/time'
+import { dueLabel, startOfTomorrow } from '../utils/time'
 import { hashText } from '../utils/hash'
 import { useToast } from '../components/Toast'
 import BottomNav from '../components/BottomNav'
@@ -18,11 +18,13 @@ export default function ReviewBook() {
   const [subTab, setSubTab] = useState<SubTab>('word')
   const [openId, setOpenId] = useState<string | null>(null)
 
-  const items = useLiveQuery(
-    () => db.review_items.orderBy('added_at').reverse().toArray(),
-    [],
-  ) ?? []
-  const dueCount = items.filter(i => i.due_at <= Date.now()).length
+  const data = useLiveQuery(async () => {
+    const all = await db.review_items.orderBy('added_at').reverse().toArray()
+    const dueBefore = startOfTomorrow()
+    return { items: all, dueCount: all.filter(i => i.due_at < dueBefore).length }
+  }, [])
+  const items = data?.items ?? []
+  const dueCount = data?.dueCount ?? 0
 
   async function handleDelete(id: string) {
     await deleteReviewItem(id)
