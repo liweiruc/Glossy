@@ -4,7 +4,9 @@ import { WORD_RE } from '../utils/highlight'
 
 interface Props {
   text: string
-  onWordClick: (word: string) => void
+  // `start` is the offset in `text`, so a caller reading a passage can tell which
+  // occurrence was tapped and hand the model the right sentence.
+  onWordClick: (word: string, start: number) => void
   chunks?: string[]
 }
 
@@ -38,14 +40,15 @@ function ClickableTextInner({ text, onWordClick, chunks }: Props) {
 
   // Single words stay tappable but carry no decoration — underlining every word turns
   // a paragraph into noise. Only chunks are marked, because their extent is the point.
-  function pushWords(slice: string) {
+  function pushWords(slice: string, offset: number) {
     let last = 0
     for (const match of slice.matchAll(WORD_RE)) {
       const start = match.index ?? 0
       if (start > last) nodes.push(<Fragment key={key++}>{slice.slice(last, start)}</Fragment>)
       const word = match[0]
+      const at = offset + start
       nodes.push(
-        <span key={key++} className="clickable-word" onClick={() => onWordClick(word)}>
+        <span key={key++} className="clickable-word" onClick={() => onWordClick(word, at)}>
           {word}
         </span>
       )
@@ -56,16 +59,17 @@ function ClickableTextInner({ text, onWordClick, chunks }: Props) {
 
   let cursor = 0
   for (const range of ranges) {
-    if (range.start > cursor) pushWords(text.slice(cursor, range.start))
+    if (range.start > cursor) pushWords(text.slice(cursor, range.start), cursor)
     const chunk = text.slice(range.start, range.end)
+    const at = range.start
     nodes.push(
-      <span key={key++} className="clickable-chunk" onClick={() => onWordClick(chunk)}>
+      <span key={key++} className="clickable-chunk" onClick={() => onWordClick(chunk, at)}>
         {chunk}
       </span>
     )
     cursor = range.end
   }
-  if (cursor < text.length) pushWords(text.slice(cursor))
+  if (cursor < text.length) pushWords(text.slice(cursor), cursor)
 
   return <>{nodes}</>
 }

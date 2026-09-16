@@ -3,8 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Search, Settings as SettingsIcon, SendHorizontal } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db'
-import type { HistoryItem } from '../db'
-import { deleteHistoryItem } from '../db/queries'
+import { addCapture, deleteCapture, deleteHistoryItem } from '../db/queries'
 import { lemmatize } from '../utils/lemmatize'
 import { hashText } from '../utils/hash'
 import { useToast } from '../components/Toast'
@@ -15,10 +14,11 @@ import { relativeTime } from '../utils/time'
 export default function Home() {
   const navigate = useNavigate()
   const { showToast } = useToast()
-  const [tab, setTab] = useState<'lookup' | 'translate'>('lookup')
+  const [tab, setTab] = useState<'lookup' | 'translate' | 'read'>('lookup')
   const [openId, setOpenId] = useState<string | null>(null)
   const [lookupQuery, setLookupQuery] = useState('')
   const [translateQuery, setTranslateQuery] = useState('')
+  const [readQuery, setReadQuery] = useState('')
   const [hashing, setHashing] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const lastInputTime = useRef(0)
@@ -29,8 +29,36 @@ export default function Home() {
     [],
   ) ?? []
 
-  const recentType = tab === 'lookup' ? 'word' : 'translation'
-  const recent = allRecent.filter(i => i.type === recentType).slice(0, 10)
+  const captures = useLiveQuery(
+    () => db.captures.orderBy('created_at').reverse().limit(10).toArray(),
+    [],
+  ) ?? []
+
+  // One list, three sources: each tab shows what it produced.
+  const recent = tab === 'read'
+    ? captures.map(c => ({
+      id: c.id,
+      text: c.text,
+      at: c.created_at,
+      open: () => navigate('/read/' + c.id),
+      remove: async () => {
+        await deleteCapture(c.id)
+        showToast('Removed from history')
+      },
+    }))
+    : allRecent
+      .filter(i => i.type === (tab === 'lookup' ? 'word' : 'translation'))
+      .slice(0, 10)
+      .map(i => ({
+        id: i.id,
+        text: i.display_text,
+        at: i.queried_at,
+        open: () => navigate((i.type === 'word' ? '/lookup/' : '/translate/') + i.ref_key),
+        remove: async () => {
+          await deleteHistoryItem(i.id)
+          showToast('Removed from history')
+        },
+      }))
 
   function handleSearch() {
     const now = Date.now()
@@ -62,19 +90,20 @@ export default function Home() {
     }
   }
 
-  function handleItemClick(item: HistoryItem) {
-    if (item.type === 'word') navigate('/lookup/' + item.ref_key)
-    else navigate('/translate/' + item.ref_key)
-  }
-
-  async function handleDelete(id: string) {
-    await deleteHistoryItem(id)
-    setOpenId(null)
-    showToast('Removed from history')
+  // A passage is kept the moment it is opened: it is the thing the learner will mine,
+  // and its cards point back at it.
+  async function handleRead() {
+    const text = readQuery.trim()
+    if (!text) return
+    const id = crypto.randomUUID()
+    await addCapture({ id, text, created_at: Date.now() })
+    setReadQuery('')
+    navigate('/read/' + id)
   }
 
   const canLookup = !!lookupQuery.trim()
   const canTranslate = !hashing && !!translateQuery.trim()
+  const canRead = !!readQuery.trim()
 
   const spinner = (
     <span style={{
@@ -109,7 +138,7 @@ export default function Home() {
       >
         {/* TabBar */}
         <div style={{ display: 'flex', borderBottom: '0.5px solid var(--border-tertiary)', marginBottom: 14 }}>
-          {(['lookup', 'translate'] as const).map(t => (
+          {(['lookup', 'translate', 'read'] as const).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -125,7 +154,7 @@ export default function Home() {
                 fontFamily: 'inherit',
               }}
             >
-              {t === 'lookup' ? 'Lookup' : 'Translate'}
+              {t === 'lookup' ? 'Lookup' : t === 'translate' ? 'Translate' : 'Read'}
             </button>
           ))}
         </div>
@@ -205,6 +234,43 @@ export default function Home() {
           </div>
         )}
 
+        {/* Paste box — read tab */}
+        {tab === 'read' && (
+          <div style={{
+            background: 'var(--bg-secondary)', borderRadius: 10,
+            padding: '10px 12px', marginBottom: 24,
+          }}>
+            <textarea
+              value={readQuery}
+              onChange={e => { setReadQuery(e.target.value); lastInputTime.current = Date.now() }}
+              placeholder="Paste English you met — a line, a paragraph"
+              rows={4}
+              style={{
+                width: '100%', border: 'none', background: 'transparent',
+                fontSize: 18, color: 'var(--text-primary)', outline: 'none',
+                fontFamily: 'inherit', resize: 'none', boxSizing: 'border-box',
+                lineHeight: 1.5,
+              }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+              <button
+                onClick={handleRead}
+                disabled={!canRead}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 4,
+                  background: canRead ? 'var(--amber-600)' : 'var(--border-tertiary)',
+                  color: '#fff', border: 'none', borderRadius: 6,
+                  padding: '5px 10px', fontSize: 16, cursor: canRead ? 'pointer' : 'default',
+                  fontFamily: 'inherit',
+                }}
+              >
+                <SendHorizontal size={13} />
+                Read it
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Recent list */}
         {recent.length > 0 && (
           <section>
@@ -220,10 +286,10 @@ export default function Home() {
                 key={item.id}
                 open={openId === item.id}
                 onOpenChange={o => setOpenId(o ? item.id : null)}
-                onDelete={() => handleDelete(item.id)}
+                onDelete={() => { item.remove(); setOpenId(null) }}
               >
                 <div
-                  onClick={() => handleItemClick(item)}
+                  onClick={item.open}
                   style={{
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                     padding: '10px 0',
@@ -236,10 +302,10 @@ export default function Home() {
                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     maxWidth: '72%',
                   }}>
-                    {item.display_text}
+                    {item.text}
                   </span>
                   <span style={{ fontSize: 14, color: 'var(--text-tertiary)', flexShrink: 0 }}>
-                    {relativeTime(item.queried_at)}
+                    {relativeTime(item.at)}
                   </span>
                 </div>
               </SwipeToDelete>

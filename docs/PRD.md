@@ -51,6 +51,7 @@ Glossy 是一款专注于"查得到、记得住"的英语学习工具。区别�
 | 复习本 | 用户主动加入的待复习条目集合 |
 | 复习会话 | 卡片式复习，支持单词卡和句子卡 |
 | 评分调度 | 四档评分（Again/Hard/Good/Easy），SM-2 算法调度 |
+| 语境采集 | 粘贴遇到的英文段落，点单词或整条短语，查它在这句话里的意思，连同原句一起存成卡片 |
 | 历史记录 | 所有查询自动留痕，可追溯、可补加复习 |
 | 账号与同步 | 邮箱注册登录，学习数据经 Firestore 实时跨设备同步 |
 | 本地缓存 | 查过的词和翻译永久缓存，离线可查 |
@@ -170,6 +171,7 @@ Glossy 是一款专注于"查得到、记得住"的英语学习工具。区别�
 | 9 | 设置页 | 账号信息 + 退出登录 |
 | 10 | 登录 | 邮箱密码登录，未登录时的落地页 |
 | 11 | 注册 | 邮箱密码注册 |
+| 12 | 语境采集 | 粘贴进来的段落，单词和短语都可点，点开后是"它在这句话里的意思" |
 
 ---
 
@@ -290,6 +292,24 @@ snapshot 结构（单词）：一张卡只教**一个义项**，所以 "run" 可
 }
 ```
 
+卡片还可以带 `contexts`——用户自己遇到这个词的句子，来自 Read 标签的采集：
+
+```json
+{
+  "contexts": [
+    {
+      "en": "The pay was fine, but everything was up in the air.",
+      "target": "up in the air",
+      "source": "Podcast · hiring episode",
+      "capture_id": "…"
+    }
+  ]
+}
+```
+
+`pickWordCard()` 优先拿 `contexts` 当提问的句子，词典例句退到后面，留给成熟卡当"没见过的新句子"。
+`capture_id` 只是指回出处，**不是依赖**：段落删了，卡片里的句子副本还在。
+
 拆分义项之前加入的老卡片是 `{ lemma, phonetic_uk, phonetic_us, definitions: [...] }`，
 **不迁移**：替用户从多个义项里挑一个，等于悄悄丢掉其余的。`snapshotSenses()`
 （`src/db/index.ts`）统一返回 `sense ? [sense] : definitions`，两种形状都照常渲染。
@@ -341,6 +361,7 @@ key-value 存储。本地专属，不参与 Firestore 同步：
 ### 5.4 Dexie schema 定义
 
 ```javascript
+// v1 原样保留：就地改它不会触发升级，老用户永远拿不到新 store
 db.version(1).stores({
   word_cache: 'lemma, created_at',
   translation_cache: 'source_hash, created_at',
@@ -349,7 +370,34 @@ db.version(1).stores({
   review_logs: 'id, item_id, reviewed_at',
   settings: 'key'
 });
+
+// v2 加入 captures（Read 标签读过的段落）。只是多一个 store，老数据不动，
+// 因此不需要 upgrade 函数
+db.version(2).stores({
+  word_cache: 'lemma, created_at',
+  translation_cache: 'source_hash, created_at',
+  history: 'id, queried_at, type, ref_key',
+  review_items: 'id, due_at, type, added_at',
+  review_logs: 'id, item_id, reviewed_at',
+  settings: 'key',
+  captures: 'id, created_at'
+});
 ```
+
+#### captures（读过的段落）
+
+主键：id（UUID）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | string | UUID |
+| text | string | 粘贴进来的整段英文 |
+| source | string\|null | 出处，用户自己填（"Podcast · hiring episode"） |
+| chunks | json | `findChunks()` 找出的可整体点击短语，随段落缓存，重开不再花钱 |
+| created_at | timestamp | 建索引，Read 标签和历史按它倒序 |
+
+卡片里的语境（`WordSnapshot.contexts`）带 `capture_id` 指回这里，但**不依赖**它：
+段落删掉后，卡片仍留着自己那份句子副本。
 
 ### 5.5 数据关系说明
 
@@ -601,7 +649,22 @@ Chinese text: {TEXT}
 与查词 prompt 同理，响应不含 `source` 字段——中文原文前端本来就有，不必让模型回显。
 spans 上限也从 2-5 收到 2-4（均为 `8f17b13` 的提速改动）。
 
-### 7.5 解析健壮性
+### 7.5 语境采集 Prompt
+
+源文件 `src/prompts/capture.ts`，对应 Read 标签的两步。
+
+**找出可整体点击的短语**（`buildChunksPrompt()`）：段落打开时跑一次，结果缓存进 `captures.chunks`，
+重开或换设备都不再花钱。要求最多 8 条、逐字照抄原文（否则前端定位不到）、跳过单个词和初学者已经会的表达。
+返回 `{ "chunks": [{ "text": "up in the air" }] }`；`findChunks()` 还会再过滤一遍——不含空格的、
+在原文里找不到的，一律丢掉。
+
+**解释它在这句话里的意思**（`buildSensePrompt()`）：每次点击跑一次，只解释**当前这一句**里的那个意思，
+不做词典式罗列。除了英文优先的 `en`，还返回 `lemma`（词典形，供"Open full"跳转）、`pos`、`cn`、
+`register`、`target`（在句中的原样拼写）。返回单个对象，不是数组。
+
+这一步**不缓存**：答案取决于句子，换一句就是另一个答案。
+
+### 7.6 解析健壮性
 
 LLM 偶尔输出非纯 JSON 内容（前后多一句话、包裹 markdown 代码块）。前端解析逻辑：
 
@@ -610,7 +673,7 @@ LLM 偶尔输出非纯 JSON 内容（前后多一句话、包裹 markdown 代码
 3. 失败则重试一次（同样的请求）
 4. 仍失败则向用户提示"AI 模型返回格式异常，请稍后重试"
 
-### 7.6 错误处理
+### 7.7 错误处理
 
 API 调用可能的失败场景及对应人话提示：
 
@@ -627,7 +690,7 @@ API 调用可能的失败场景及对应人话提示：
 余额不足、模型名错误不再单独提示：密钥和模型都由 Worker 掌管，用户无从修正，
 细分错误码只会造成困惑，一律并入 `server`。
 
-### 7.7 安全性说明
+### 7.8 安全性说明
 
 - `DEEPSEEK_API_KEY` 只存在于 Cloudflare Worker secret（`wrangler secret put` 设置），
   不写进 `wrangler.toml`，也永不下发前端

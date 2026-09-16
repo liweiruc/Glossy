@@ -69,7 +69,7 @@ BottomNav（Home 激活）
 
 ### TabBar
 
-- 两个 tab：**Lookup**（默认激活）和 **Translate**
+- 三个 tab：**Lookup**（默认激活）、**Translate**、**Read**
 - 下边框：整体 0.5px 三级边框色
 - 激活 tab：底部 2px 实线，琥珀橙；文字正常色；weight 500
 - 非激活 tab：文字次要色
@@ -84,10 +84,19 @@ BottomNav（Home 激活）
   - Translate 状态 placeholder："输入中文，获取地道英文翻译"
 - 回车 / 点击搜索图标触发查询
 
+### 粘贴框（Read tab）
+
+- 与翻译框同款：二级背景、圆角 10px、内边距 10px 12px
+- textarea：4 行，18px（段落比一个词长，21px 会把三行文字挤出屏幕），placeholder "Paste English you met — a line, a paragraph"
+- 右下角按钮 "Read it"（琥珀橙，圆角 6px，`SendHorizontal` 13px）：写入一条 `captures` 记录并跳到 `/read/:id`
+  - 段落在打开的那一刻就落库——它是接下来要被"开采"的东西，卡片也要指回它
+- 不用回车提交：粘进来的本来就是多行文本
+
 ### RecentList
 
 - 标题："Recent"（11px 全大写，三级文字色，字母间距 0.5px）
-- 列表：最多显示 10 条，按 queried_at 倒序
+- 三个 tab 各看各的：Lookup / Translate 看 `history`，Read 看 `captures`
+- 列表：最多显示 10 条，按时间倒序
 - 每行：
   - 左：单词或中文句子截断（最多 20 字，超出省略号），14px 正常色
   - 右：相对时间（"2 min ago" / "today" / "yesterday"），11px 三级色
@@ -472,8 +481,11 @@ BottomNav（History 激活）
 - flex 横排，垂直居中，gap 10px，padding 10px 2px，底部 0.5px 三级分隔线
 - 左：类型图标（TypeBadge）
   - 28px × 28px，圆角 6px
-  - 单词（W）：二级背景色，次要文字色，14px
-  - 翻译（T）：`#FAEEDA` 背景，`#854F0B` 文字，14px
+  - 单词（W）：二级背景色，次要文字色，18px
+  - 翻译（T）：`#FAEEDA` 背景，`#854F0B` 文字，18px
+  - 采集的段落：白底 + 0.5px 边框 + `Bookmark` 图标（14px 次要色）——不引入新颜色，靠形状区分
+- 采集的段落行：主文字是段落开头（单行截断），副文字是"出处 · 相对时间"，右侧是"N saved"；点击回到 `/read/:id`
+  - 左滑删除只删段落，卡片里的句子副本不受影响
 - 中（flex-1，min-width 0）：
   - 主文字：13px，正常色，单行截断省略（`white-space: nowrap; overflow: hidden; text-overflow: ellipsis`）
     - 单词：显示词原形（如"ephemeral"）
@@ -570,6 +582,64 @@ Base URL、API key、模型名都不在这里，用户也无从配置：LLM 请�
 - **登录链接**：按钮下方，"已有账号？登录"，"登录"为琥珀橙链接，跳转 `/login`
 
 交互：注册成功后 navigate 到 `/`；密码与确认密码不一致时前端拦截，显示"两次输入的密码不一致"。
+
+---
+
+## 屏幕 12：语境采集（Read）
+
+路由：`/read/:id`。段落来自 Home 的 Read tab，存在 `captures` 里。
+
+### 布局
+
+```
+AppBar
+  左：ChevronLeft（返回）
+  中："Read"（18px 次要色）
+Body（padding 16px 18px 28px，可滚动）
+  SourceRow
+  Passage
+  Hint
+Footer（固定底部）
+SenseSheet（点词后从底部升起）
+```
+
+### SourceRow
+
+- 未填时：`Tag` 图标（14px 三级色）+ "Where is this from?"（14px 三级色）
+- 填了就直接显示出处文字；点一下变成输入框（二级背景、圆角 8px、16px），失焦或回车即存
+- 出处挂在段落上，不是挂在每张卡上：一段话就是一个来源，存卡时自动带过去
+
+### Passage
+
+- 18px，行高 1.75 —— 比正文松，因为每个词都是可点的目标
+- 单词：`.clickable-word`，可点但不加任何装饰
+- 短语：`.clickable-chunk`，二级背景 + 圆角 4px + 2px 底线 + `nowrap`，整条一起点
+  - 短语由 `findChunks()` 给出，只在段落第一次打开时问一次模型，结果存进 `captures.chunks`
+
+### Hint
+
+- 短语还没回来时："Finding the phrases worth learning…"（14px 三级色）
+- 回来之后："Tap any word. Shaded phrases are looked up whole."
+
+### Footer
+
+- 左："N saved from this text"（14px 三级色，实时统计指回这段话的卡片数）
+- 右："Done"（0.5px 边框，圆角 8px，内边距 11px 16px）→ 回首页
+
+### SenseSheet（底部浮层）
+
+- 遮罩 `rgba(0,0,0,0.35)`，点遮罩或 `X` 关闭
+- Handle（32×3）+ 被点的词或短语（29px weight 500）
+- 加载中："Reading the sentence…"（17px 三级色）
+- 内容：
+  - "in this sentence"（14px 三级色）+ 该句原文（17px 次要色），句中目标词转正常色加粗
+  - `SenseBlock size="answer" maxExamples={0}`：词性 pill + 释义 23px weight 500 + "中文"chip
+    - 只解释它在这句话里的意思，不列其他义项
+- 操作：
+  - 主按钮 "Save with this sentence"（琥珀橙，flex 1）：`addContextCard()` 把释义和**原句**一起存成卡片
+    - 同一个义项再次遇到，只往已有卡片的 `contexts` 里追加句子，不会多出一张卡
+  - 次按钮 "Open full"：跳到 `/lookup/:lemma`，看完整词条
+- 存完后操作区换成回执：`Check`（琥珀橙）+ "Saved with this sentence" + "Keep reading"
 
 ---
 

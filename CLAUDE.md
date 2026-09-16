@@ -25,12 +25,12 @@
 /src
   /auth             Firebase Auth 上下文（AuthContext.tsx）
   /components       可复用 UI 组件
-  /pages            页面级组件（Home、Lookup、Translate、Review、History、Settings、Login、Register）
+  /pages            页面级组件（Home、Lookup、Translate、CaptureText、Review、History、Settings、Login、Register）
   /db               Dexie schema（index.ts）、查询层（queries.ts）、Firestore 同步层（firestore-sync.ts）
   /algorithms       SM-2 等核心算法
   /api              调用 Worker 代理（llm.ts）与错误处理
-  /prompts          查词与翻译的 prompt 文本（独立文件，便于迭代）
-  /utils            lemmatize、hash 等工具函数
+  /prompts          查词、翻译、语境采集的 prompt 文本（独立文件，便于迭代）
+  /utils            lemmatize、hash、markTarget、sentenceAt 等工具函数
   firebase.ts       Firebase app 初始化（Auth + Firestore）
 /worker
   src/index.ts      Cloudflare Worker：校验 Firebase ID token → 调用 DeepSeek → 流式转发
@@ -55,20 +55,22 @@ firestore.rules     Firestore 安全规则（需 firebase deploy 部署）
 - **共享缓存**（任意已登录用户可读写）：Firestore `word_cache`、`translation_cache`
   - 共享缓存不会整体同步到本地：本地 `word_cache` / `translation_cache` 只有本设备查过或打开过的内容。所以从 History / 复习本 / 直接 URL 打开结果页、以及 History 的「+ add」，必须走 `getCachedWord` / `getCachedTranslation`（先 IndexedDB，再共享缓存；不调 LLM、不写 history）——只查 IndexedDB 的话，换一台设备就打不开同步过来的条目
   - 翻译页刷新走 `generateTranslation`：直接调 LLM 并覆盖本地和共享缓存，全体用户都会看到新结果。走 `translateText` 会先命中共享缓存，永远拿回旧结果
-- **用户私有数据**（Firestore 路径 `users/{uid}/`）：`history`、`review_items`、`review_logs`
+- **用户私有数据**（Firestore 路径 `users/{uid}/`）：`history`、`review_items`、`review_logs`、`captures`
 - Firestore 使用 `persistentLocalCache` + `persistentMultipleTabManager`，离线写入自动排队并在上线后重试
 
 ## 关键约束
 
-- 本地 IndexedDB 共 6 个 store：
-  `word_cache`、`translation_cache`、`history`、`review_items`、`review_logs`、`settings`
+- 本地 IndexedDB 共 7 个 store：
+  `word_cache`、`translation_cache`、`history`、`review_items`、`review_logs`、`settings`、`captures`
   （`settings` 存同步标记 `bootstrapped:{uid}` 和显示偏好 `chinese_display`；本地专属，不参与同步）
-- Dexie schema 仍是 `version(1)`，从未迁移过。改 `.stores({...})` 必须新增 `this.version(2)`，原样保留 v1 那段——就地修改不会触发升级，老用户拿不到新 store/index
+- Dexie schema 当前是 `version(2)`（v2 加了 `captures`）。再改 `.stores({...})` 必须新增 `this.version(3)`，并原样保留 v1、v2 那两段——就地修改不会触发升级，老用户拿不到新 store/index
 - **前端不直接调用 LLM**：`callLLM` 把 `{ prompt, model }` POST 到 `VITE_PROXY_URL`，带上 Firebase ID token；由 Worker 去请求 DeepSeek 的 `/v1/chat/completions`
 - DeepSeek API key 只存在于 Worker secret（`DEEPSEEK_API_KEY`），永不下发前端；用户不需要也无法自行填写
 - 模型在 `getModel()` 里硬编码为 `deepseek-chat`；Settings 页面只有账号信息和退出登录，没有 LLM 配置 UI
 - **删除操作绝不级联到 `word_cache` / `translation_cache`**：这两个 collection 全体用户共享（见 `firestore.rules`），删一条会毁掉所有人的缓存并触发重新付费调用 LLM。删 history 只删 history 行，`review_items` 同理
 - **英文优先**：中文默认折叠，点"中文"才展开，由 `chinese_display`（`always` / `tap` / `never`，默认 `tap`）控制。查词页、翻译浮层、复习卡揭晓面共用 `SenseBlock`（`src/components/SenseBlock.tsx`）——释义的排版只有这一处
+- **语境采集**（Home 的 Read 标签 → `/read/:id`）：粘贴的段落存进 `captures`，`findChunks()` 一次性问出值得整体学的短语并缓存在这条记录上；点词或短语走 `explainInContext()`，只解释它在**这句话**里的意思（`sentenceAt()` 负责切出那一句）。保存时写的是 `addContextCard()`——同一个义项再次遇到只往 `contexts` 里追加句子，不会多出一张卡
+- **卡片自带语境**：`WordSnapshot.contexts` 存用户自己遇到的句子，`pickWordCard()` 优先用它，词典例句退居其后（留给成熟卡的"没见过的新句子"）
 - **复习卡按熟练度换提问方式**：`pickWordCard()`（`src/algorithms/cards.ts`）返回 `context` / `cloze` / `fresh` / `bare`。只有在该义项完全没有例句时才退回光词头——有句子就绝不裸考单词
 - **一张复习卡 = 一个义项**：`WordSnapshot.sense` 存单个 `Definition`，卡片身份是 `senseKey()`（词 + 释义原文）。拆分之前的老卡片带的是 `definitions: Definition[]`，**不迁移**——用 `snapshotSenses()` 读，两种形状都能渲染。新增入口：`addWordSense()`
 - 查词页右上角的重新生成走 `generateWord()`：直接调 LLM 并覆盖本地和共享缓存（全体用户可见）。`lookupWord()` 会先命中缓存，永远不会重新生成

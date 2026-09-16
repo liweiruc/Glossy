@@ -6,7 +6,7 @@ import {
 import type { Table } from 'dexie'
 import { firestore } from '../firebase'
 import { db } from './index'
-import type { WordCache, TranslationCache, HistoryItem, ReviewItem, ReviewLog } from './index'
+import type { WordCache, TranslationCache, HistoryItem, ReviewItem, ReviewLog, Capture } from './index'
 
 // ── Shared caches ────────────────────────────────────────────────────────────
 
@@ -51,6 +51,25 @@ export async function updateReviewItemInFirestore(
 ): Promise<void> {
   console.log('[sync] update review_item', id)
   await setDoc(doc(userCol(uid, 'review_items'), id), data, { merge: true })
+}
+
+export async function pushCapture(uid: string, capture: Capture): Promise<void> {
+  console.log('[sync] push capture', capture.id)
+  await setDoc(doc(userCol(uid, 'captures'), capture.id), capture)
+}
+
+export async function updateCaptureInFirestore(
+  uid: string,
+  id: string,
+  data: Partial<Capture>,
+): Promise<void> {
+  console.log('[sync] update capture', id)
+  await setDoc(doc(userCol(uid, 'captures'), id), data, { merge: true })
+}
+
+export async function deleteCaptureFromFirestore(uid: string, id: string): Promise<void> {
+  console.log('[sync] delete capture', id)
+  await deleteDoc(doc(userCol(uid, 'captures'), id))
 }
 
 export async function pushReviewLog(uid: string, log: ReviewLog): Promise<void> {
@@ -111,28 +130,35 @@ export async function pushLocalOnlyItems(uid: string): Promise<void> {
     return
   }
 
-  const [remoteHistory, remoteItems, remoteLogs, localHistory, localItems, localLogs] =
-    await Promise.all([
-      getDocs(userCol(uid, 'history')),
-      getDocs(userCol(uid, 'review_items')),
-      getDocs(userCol(uid, 'review_logs')),
-      db.history.toArray(),
-      db.review_items.toArray(),
-      db.review_logs.toArray(),
-    ])
+  const [
+    remoteHistory, remoteItems, remoteLogs, remoteCaptures,
+    localHistory, localItems, localLogs, localCaptures,
+  ] = await Promise.all([
+    getDocs(userCol(uid, 'history')),
+    getDocs(userCol(uid, 'review_items')),
+    getDocs(userCol(uid, 'review_logs')),
+    getDocs(userCol(uid, 'captures')),
+    db.history.toArray(),
+    db.review_items.toArray(),
+    db.review_logs.toArray(),
+    db.captures.toArray(),
+  ])
 
   const remoteHistoryIds = new Set(remoteHistory.docs.map(d => d.id))
   const remoteItemIds = new Set(remoteItems.docs.map(d => d.id))
   const remoteLogIds = new Set(remoteLogs.docs.map(d => d.id))
+  const remoteCaptureIds = new Set(remoteCaptures.docs.map(d => d.id))
 
   const newHistory = localHistory.filter(h => !remoteHistoryIds.has(h.id))
   const newItems = localItems.filter(i => !remoteItemIds.has(i.id))
   const newLogs = localLogs.filter(l => !remoteLogIds.has(l.id))
+  const newCaptures = localCaptures.filter(c => !remoteCaptureIds.has(c.id))
 
   console.log('[sync] uploading local-only items', {
     history: newHistory.length,
     review_items: newItems.length,
     review_logs: newLogs.length,
+    captures: newCaptures.length,
   })
 
   type Op = (b: WriteBatch) => void
@@ -140,6 +166,7 @@ export async function pushLocalOnlyItems(uid: string): Promise<void> {
     ...newHistory.map(h => (b: WriteBatch) => { b.set(doc(userCol(uid, 'history'), h.id), h) }),
     ...newItems.map(i => (b: WriteBatch) => { b.set(doc(userCol(uid, 'review_items'), i.id), i) }),
     ...newLogs.map(l => (b: WriteBatch) => { b.set(doc(userCol(uid, 'review_logs'), l.id), l) }),
+    ...newCaptures.map(c => (b: WriteBatch) => { b.set(doc(userCol(uid, 'captures'), c.id), c) }),
   ]
 
   const CHUNK = 400
@@ -222,6 +249,7 @@ export function subscribeToUserData(uid: string): Unsubscribe {
     subscribeCollection<HistoryItem>(uid, 'history', db.history),
     subscribeCollection<ReviewItem>(uid, 'review_items', db.review_items),
     subscribeCollection<ReviewLog>(uid, 'review_logs', db.review_logs),
+    subscribeCollection<Capture>(uid, 'captures', db.captures),
   ]
 
   return () => {

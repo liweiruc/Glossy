@@ -70,6 +70,16 @@ export interface ReviewItem {
   last_reviewed_at: number | null
 }
 
+// A sentence the learner actually met the word in, kept with the card. This is the
+// strongest hook there is at review time, which is why it travels with the snapshot
+// rather than being looked up again later.
+export interface WordContext {
+  en: string
+  target?: string
+  source?: string
+  capture_id?: string
+}
+
 // A card teaches ONE sense, so "run" can sit in the review book several times — once per
 // meaning the learner actually met. `definitions` is the shape cards had before that
 // split; those keep rendering as they were rather than being migrated, since picking one
@@ -80,6 +90,17 @@ export interface WordSnapshot {
   phonetic_us: string
   sense?: Definition
   definitions?: Definition[]
+  contexts?: WordContext[]
+}
+
+// A passage the learner pasted or shared in, kept so its cards can point back at where
+// they came from — and so the passage can be reopened and mined again later.
+export interface Capture {
+  id: string
+  text: string
+  source?: string
+  chunks?: string[]
+  created_at: number
 }
 
 export function snapshotSenses(snap: WordSnapshot): Definition[] {
@@ -114,9 +135,12 @@ class GlossyDB extends Dexie {
   review_items!: Table<ReviewItem, string>
   review_logs!: Table<ReviewLog, string>
   settings!: Table<Setting, string>
+  captures!: Table<Capture, string>
 
   constructor() {
     super('lexi')
+    // v1 stays exactly as it shipped. Editing it in place would not trigger an upgrade,
+    // so existing installs would never get the new store.
     this.version(1).stores({
       word_cache: 'lemma, created_at',
       translation_cache: 'source_hash, created_at',
@@ -124,6 +148,17 @@ class GlossyDB extends Dexie {
       review_items: 'id, due_at, type, added_at',
       review_logs: 'id, item_id, reviewed_at',
       settings: 'key',
+    })
+    // v2 adds `captures` — passages read in the Read tab. Nothing else changes, and no
+    // upgrade function is needed: existing rows are untouched by a new store.
+    this.version(2).stores({
+      word_cache: 'lemma, created_at',
+      translation_cache: 'source_hash, created_at',
+      history: 'id, queried_at, type, ref_key',
+      review_items: 'id, due_at, type, added_at',
+      review_logs: 'id, item_id, reviewed_at',
+      settings: 'key',
+      captures: 'id, created_at',
     })
   }
 }

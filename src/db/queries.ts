@@ -1,6 +1,7 @@
 import { db, snapshotSenses } from './index'
 import type {
   ReviewItem, ReviewLog, HistoryItem, WordSnapshot, SentenceSnapshot, Definition, WordCache,
+  Capture, WordContext,
 } from './index'
 import type { SM2Result } from '../algorithms/sm2'
 import { firebaseAuth } from '../firebase'
@@ -11,6 +12,9 @@ import {
   pushReviewLog,
   deleteReviewItemFromFirestore,
   deleteHistoryItemFromFirestore,
+  pushCapture,
+  updateCaptureInFirestore,
+  deleteCaptureFromFirestore,
 } from './firestore-sync'
 
 function uid(): string | null {
@@ -76,6 +80,70 @@ export async function getAddedSenseKeys(lemma: string): Promise<Set<string>> {
     }
   }
   return keys
+}
+
+export async function addCapture(capture: Capture): Promise<void> {
+  await db.captures.add(capture)
+  const u = uid()
+  if (u) pushCapture(u, capture).catch(e => console.error('[Firestore sync]', e))
+}
+
+export async function updateCapture(id: string, patch: Partial<Capture>): Promise<void> {
+  await db.captures.update(id, patch)
+  const u = uid()
+  if (u) updateCaptureInFirestore(u, id, patch).catch(e => console.error('[Firestore sync]', e))
+}
+
+// Removes the passage only. Cards saved from it keep their sentence — the snapshot holds
+// its own copy, exactly so a card never depends on anything outliving it.
+export async function deleteCapture(id: string): Promise<void> {
+  await db.captures.delete(id)
+  const u = uid()
+  if (u) deleteCaptureFromFirestore(u, id).catch(e => console.error('[Firestore sync]', e))
+}
+
+// A card built from a sentence the learner met, rather than from a dictionary entry.
+// Meeting the same meaning again adds the new sentence to the existing card instead of
+// making a second one: it is the same thing to learn, in one more situation.
+export async function addContextCard(
+  lemma: string,
+  sense: Definition,
+  context: WordContext,
+): Promise<string> {
+  const key = senseKey(lemma, sense)
+  const cards = await db.review_items
+    .filter(r => r.type === 'word' && (r.snapshot as WordSnapshot).lemma === lemma)
+    .toArray()
+  const existing = cards.find(card =>
+    snapshotSenses(card.snapshot as WordSnapshot).some(def => senseKey(lemma, def) === key)
+  )
+
+  if (existing) {
+    const snap = existing.snapshot as WordSnapshot
+    const snapshot: WordSnapshot = { ...snap, contexts: [...(snap.contexts ?? []), context] }
+    await db.review_items.update(existing.id, { snapshot })
+    const u = uid()
+    if (u) {
+      updateReviewItemInFirestore(u, existing.id, { snapshot })
+        .catch(e => console.error('[Firestore sync]', e))
+    }
+    return existing.id
+  }
+
+  const now = Date.now()
+  const id = crypto.randomUUID()
+  await addReviewItem({
+    id,
+    type: 'word',
+    snapshot: { lemma, phonetic_uk: '', phonetic_us: '', sense, contexts: [context] },
+    ease_factor: 2.5,
+    interval_days: 0,
+    repetitions: 0,
+    due_at: now,
+    added_at: now,
+    last_reviewed_at: null,
+  })
+  return id
 }
 
 // Adds one sense as its own card. Returns the id so the caller can offer an undo.

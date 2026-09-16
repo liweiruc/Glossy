@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './auth/AuthContext'
 import Home from './pages/Home'
 import LookupResult from './pages/LookupResult'
 import TranslateResult from './pages/TranslateResult'
+import CaptureText from './pages/CaptureText'
 import ReviewBook from './pages/ReviewBook'
 import ReviewSession from './pages/ReviewSession'
 import History from './pages/History'
@@ -26,6 +27,7 @@ function AppRoutes() {
       <Route path="/" element={<RequireAuth><Home /></RequireAuth>} />
       <Route path="/lookup/:lemma" element={<RequireAuth><LookupResult /></RequireAuth>} />
       <Route path="/translate/:hash" element={<RequireAuth><TranslateResult /></RequireAuth>} />
+      <Route path="/read/:id" element={<RequireAuth><CaptureText /></RequireAuth>} />
       <Route path="/review" element={<RequireAuth><ReviewBook /></RequireAuth>} />
       <Route path="/review/session" element={<RequireAuth><ReviewSession /></RequireAuth>} />
       <Route path="/history" element={<RequireAuth><History /></RequireAuth>} />

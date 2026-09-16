@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Clock } from 'lucide-react'
+import { Clock, Bookmark } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db'
-import type { HistoryItem, WordSnapshot, SentenceSnapshot } from '../db'
-import { addReviewItem, addWordSense, deleteHistoryItem } from '../db/queries'
+import type { HistoryItem, WordSnapshot, SentenceSnapshot, Capture } from '../db'
+import { addReviewItem, addWordSense, deleteCapture, deleteHistoryItem } from '../db/queries'
 import { getCachedWord } from '../api/lookup'
 import { getCachedTranslation } from '../api/translate'
 import { getErrorMessage } from '../api/llm'
@@ -13,6 +13,10 @@ import { hashText } from '../utils/hash'
 import { useToast } from '../components/Toast'
 import BottomNav from '../components/BottomNav'
 import SwipeToDelete from '../components/SwipeToDelete'
+
+type Row =
+  | { kind: 'lookup'; key: string; at: number; item: HistoryItem }
+  | { kind: 'capture'; key: string; at: number; capture: Capture; saved: number }
 
 function subTime(ts: number): string {
   const diff = Date.now() - ts
@@ -33,10 +37,24 @@ export default function History() {
   const [openId, setOpenId] = useState<string | null>(null)
 
   const data = useLiveQuery(async () => {
-    const [histItems, reviewItems] = await Promise.all([
+    const [histItems, reviewItems, captures] = await Promise.all([
       db.history.orderBy('queried_at').reverse().toArray(),
       db.review_items.toArray(),
+      db.captures.toArray(),
     ])
+
+    // Passages read in the Read tab share the timeline with lookups and translations —
+    // they are the same thing from the learner's side: something met, and when.
+    const captureRows: Row[] = captures.map(capture => ({
+      kind: 'capture',
+      key: capture.id,
+      at: capture.created_at,
+      capture,
+      saved: reviewItems.filter(item =>
+        item.type === 'word'
+        && ((item.snapshot as WordSnapshot).contexts ?? []).some(c => c.capture_id === capture.id)
+      ).length,
+    }))
 
     const addedLemmas = new Set(
       reviewItems
@@ -58,10 +76,15 @@ export default function History() {
       if (addedKeys.has(item.ref_key)) added.add(item.id)
     }
 
-    return { items: histItems, addedIds: added }
+    const rows: Row[] = [
+      ...histItems.map((item): Row => ({ kind: 'lookup', key: item.id, at: item.queried_at, item })),
+      ...captureRows,
+    ].sort((a, b) => b.at - a.at)
+
+    return { rows, addedIds: added }
   }, [])
 
-  const items = data?.items ?? []
+  const rows = data?.rows ?? []
   const addedIds = data?.addedIds ?? new Set<string>()
 
   async function handleAdd(item: HistoryItem) {
@@ -120,12 +143,19 @@ export default function History() {
     showToast('Removed from history')
   }
 
-  // Group items by calendar day, preserving newest-first order
-  const groups = new Map<string, HistoryItem[]>()
-  for (const item of items) {
-    const label = dayLabel(item.queried_at)
+  // Only the passage goes. Cards saved from it keep their own copy of the sentence.
+  async function handleDeleteCapture(id: string) {
+    await deleteCapture(id)
+    setOpenId(null)
+    showToast('Removed from history')
+  }
+
+  // Group rows by calendar day, preserving newest-first order
+  const groups = new Map<string, Row[]>()
+  for (const row of rows) {
+    const label = dayLabel(row.at)
     if (!groups.has(label)) groups.set(label, [])
-    groups.get(label)!.push(item)
+    groups.get(label)!.push(row)
   }
 
   return (
@@ -144,7 +174,7 @@ export default function History() {
       >
 
         {/* Empty state */}
-        {items.length === 0 && (
+        {rows.length === 0 && (
           <div style={{
             display: 'flex', flexDirection: 'column',
             alignItems: 'center', justifyContent: 'center',
@@ -165,8 +195,59 @@ export default function History() {
               {label}
             </div>
 
-            {dayItems.map((item, i) => {
+            {dayItems.map((row, i) => {
               const isLast = i === dayItems.length - 1
+
+              if (row.kind === 'capture') {
+                const { capture, saved } = row
+                return (
+                  <SwipeToDelete
+                    key={capture.id}
+                    open={openId === capture.id}
+                    onOpenChange={o => setOpenId(o ? capture.id : null)}
+                    onDelete={() => handleDeleteCapture(capture.id)}
+                  >
+                    <div
+                      onClick={() => navigate('/read/' + capture.id)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        padding: '10px 2px',
+                        borderBottom: isLast ? 'none' : '0.5px solid var(--border-tertiary)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <div style={{
+                        width: 28, height: 28, borderRadius: 6, flexShrink: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        border: '0.5px solid var(--border-primary)',
+                      }}>
+                        <Bookmark size={14} color="var(--text-secondary)" />
+                      </div>
+
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{
+                          fontSize: 17, color: 'var(--text-primary)',
+                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                        }}>
+                          {capture.text}
+                        </div>
+                        <div style={{
+                          fontSize: 14, color: 'var(--text-tertiary)', marginTop: 1,
+                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                        }}>
+                          {capture.source ? `${capture.source} · ` : ''}{subTime(capture.created_at)}
+                        </div>
+                      </div>
+
+                      <span style={{ fontSize: 14, color: 'var(--text-tertiary)', flexShrink: 0 }}>
+                        {saved} saved
+                      </span>
+                    </div>
+                  </SwipeToDelete>
+                )
+              }
+
+              const item = row.item
               const isAdded = addedIds.has(item.id)
               const isPending = pendingIds.has(item.id)
 

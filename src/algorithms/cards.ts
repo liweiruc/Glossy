@@ -27,7 +27,13 @@ export function pickWordCard(item: Pick<ReviewItem, 'snapshot' | 'repetitions'>)
   const snap = item.snapshot as WordSnapshot
   const senses = snapshotSenses(snap)
   const sense = senses[0] ?? null
-  const examples = sense?.examples ?? []
+  // The learner's own sentences come first. Meeting the word where they actually met it
+  // beats a sentence written for a dictionary, so that is what a card opens with; the
+  // dictionary examples then serve as the unseen sentences a mature card moves on to.
+  const examples: Example[] = [
+    ...(snap.contexts ?? []).map(c => ({ en: c.en, cn: '', target: c.target })),
+    ...(sense?.examples ?? []),
+  ]
 
   if (!sense || examples.length === 0) {
     return { mode: 'bare', senses, sense, example: null }
