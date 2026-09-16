@@ -10,15 +10,17 @@ interface Props {
   def: Definition
   lemma: string
   chinese: ChineseDisplay
-  size?: 'full' | 'compact'
+  size?: 'full' | 'compact' | 'answer'
   maxExamples?: number
   onWordClick?: (word: string) => void
   action?: ReactNode
 }
 
 const SIZES = {
-  full: { pos: 14, def: 17, example: 16, gap: 8, toggleRow: 44 },
-  compact: { pos: 13, def: 17, example: 14, gap: 6, toggleRow: 38 },
+  full: { pos: 14, def: 17, defWeight: 400, example: 16, gap: 8, toggleRow: 44 },
+  compact: { pos: 13, def: 17, defWeight: 400, example: 14, gap: 6, toggleRow: 38 },
+  // Revealing a review card: the meaning is the answer, so it is the largest thing there.
+  answer: { pos: 13, def: 23, defWeight: 500, example: 16, gap: 8, toggleRow: 44 },
 }
 
 // One sense of a word, rendered the same way everywhere it appears: the English
@@ -69,7 +71,10 @@ export default function SenseBlock({ def, lemma, chinese, size = 'full', maxExam
         )}
       </div>
 
-      <div style={{ fontSize: s.def, color: 'var(--text-primary)', lineHeight: 1.45, marginTop: 4 }}>
+      <div style={{
+        fontSize: s.def, fontWeight: s.defWeight,
+        color: 'var(--text-primary)', lineHeight: 1.45, marginTop: 4,
+      }}>
         {english(def.en)}
       </div>
 
@@ -101,7 +106,7 @@ export default function SenseBlock({ def, lemma, chinese, size = 'full', maxExam
         </div>
       )}
 
-      {(maxExamples ? def.examples.slice(0, maxExamples) : def.examples).map((ex, i) => (
+      {(maxExamples === undefined ? def.examples : def.examples.slice(0, maxExamples)).map((ex, i) => (
         <div key={i} style={{ display: 'flex', marginTop: 6 }}>
           <div style={{
             width: 2, background: 'var(--border-tertiary)', borderRadius: 1,

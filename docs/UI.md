@@ -337,14 +337,24 @@ CardFront（flex-1，居中布局）
 
 ### CardFront
 
+单词卡有四种形态，由 `pickWordCard()`（`src/algorithms/cards.ts`）按熟练度选出。只要手上有句子，就绝不光考一个孤零零的词——那正是这次改版要甩掉的习惯。
+
+| 形态 | 触发条件 | 正面长什么样 |
+|------|----------|--------------|
+| `context` | `repetitions === 0` | 保存时的那句话，目标词标出来，问 "What does it mean here?" |
+| `cloze` | `repetitions >= 1`，且目标词能在句中定位 | 同一句话，目标词挖空，英文释义作为 Hint 给出 |
+| `fresh` | `repetitions >= 3`，且该义项有多于一条例句 | 一句这张卡还没用过的例句，顶部挂 "new example" 标签 |
+| `bare` | 该义项没有可用例句（多为 schema 2 之前的老词条） | 退回原来的大字词头（42px） |
+
 - 整个 Body 垂直水平居中
-- **ProgressHint**：固定在卡片内容上方
-  - 文字："recall the meaning"（单词卡）或 "translate this sentence"（句子卡）
-  - 11px，三级色，margin-bottom auto（把内容推向中间）
+- **ProgressHint**（顶部，14px 三级色）：`cardPrompt()` 给出，分别是 "from your saved sentence" / "fill in the missing word(s)" / "a sentence you have not seen before"（配 "new example" 胶囊：二级背景、圆角 8px、13px 次要色）/ "recall the meaning"；句子卡仍是 "translate this sentence"
 - **MainContent**：
-  - 单词卡：英文单词，42px，weight 500，正常色，字母间距 -1px
-  - 句子卡：中文原句，18px，weight 400，正常色，行高 1.6，最大宽度 280px，居中
-- **SubHint**："tap to reveal"（12px，三级色，margin-top 14px，margin-bottom 30px）
+  - 单词卡（有句子）：例句 23px，行高 1.7，最大宽度 300px，居中；目标词 600 字重 + 2px 底线
+  - `cloze` 的挖空：`display: inline-block` 的空白，底线 2px，宽度按答案长度估算（64–190px）——透露长度，但不透露拼写
+  - 单词卡（`bare`）：英文单词，42px，weight 500，字母间距 -1px
+  - 句子卡：中文原句，23px，行高 1.6，最大宽度 280px，居中
+- **Hint 框**（仅 `cloze`）：二级背景，圆角 10px，内边距 12px 14px；"HINT"（13px 三级色全大写）+ 英文释义（17px）；答案是多词短语时再加一行"N words"
+- **SubHint**：`context` / `fresh` 是 "What does it mean here?"（16px 三级色）；`bare` 保留 "tap to reveal"；`cloze` 不出这一行（Hint 框已经是提示）
 - **ShowButton**："Show answer"
   - 透明背景，0.5px 二级边框，圆角 8px，内边距 9px 22px，13px 正常色
   - 点击：卡片翻到揭晓面（动画：Y 轴 flip，duration 300ms）
@@ -366,15 +376,19 @@ RatingBar（固定底部）
 
 ### 单词卡揭晓面
 
-**WordHeader**（顶部，左对齐，padding 14px 18px 0）：
+**问题区**（顶部，padding 14px 18px 0）：
 
-- 单词（24px，weight 500，正常色）
-- 音标行（12px，次要色）+ `Volume2` 图标（琥珀橙，可点击）
+- 形态标签（14px 三级色）+ 刚才那句话（17px 次要色，行高 1.55），目标词转为正常色加粗
+- `cloze` 在这里把挖掉的词填回去——答案首先要看得见
+- `bare` 卡没有句子，这里显示词头（36px）
 
-**DefinitionArea**（padding 0 18px，可滚动）：
+**答案区**（padding 0 18px，可滚动）：
 
-- 完整渲染用户加入时 snapshot 里的所有释义和例句
-- 格式与屏幕 2 的 DefinitionBlock 相同（词性 pill + 英文释义 + 中文释义 + 例句）
+- 释义**第一、最大**：`SenseBlock size="answer"`——词性 pill（13px）+ 释义 23px weight 500 + "中文"chip
+  - 正面已经出现过的那句例句会被排除，只补一条别的例句（有就补，没有就不补）
+- 释义下方才是词头和音标：单词 17px 次要色 + 音标 16px 三级色 + `Volume2`（13px 琥珀橙）
+  - 顺序是有意的：词本来就写在句子里，学习者要回忆的是意思，不是这个词长什么样
+- 拆分义项之前的老卡片（`definitions` 数组）走另一条分支：先音标行，再逐条 `SenseBlock size="compact"`，和改版前一致
 - 注意：此处用的是 snapshot 快照，不是缓存中的当前数据
 
 ### 句子卡揭晓面
