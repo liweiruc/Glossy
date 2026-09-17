@@ -76,6 +76,8 @@ firestore.rules     Firestore 安全规则（需 firebase deploy 部署）
 - 查词页右上角的重新生成走 `generateWord()`：直接调 LLM 并覆盖本地和共享缓存（全体用户可见）。`lookupWord()` 会先命中缓存，永远不会重新生成
 - `word_cache` 带 `schema_version`（`WORD_CACHE_SCHEMA`，当前为 2）。给 prompt 加字段时把它 +1，且新字段必须可选：共享缓存里的旧条目不会批量重生成（每次都是付费调用），渲染必须能降级。`markTarget()`（`src/utils/highlight.ts`）就是这么处理缺 `target` 的老例句的
 - 多词短语整体查询：例句和译文里的 chunk 用 `.clickable-chunk` 标成一个整体，点 "pull off" 查的是短语而不是 "pull"。单个词仍可点，但不加任何装饰——每个词都画线，整段就没法读了
+- **`src/main.tsx` 里的 `import { registerSW } from 'virtual:pwa-register'` 不能删**：`injectRegister` 默认 `auto`，只要没有任何源码 import 这个虚拟模块，vite-plugin-pwa 就退回去生成一段光秃秃的 `dist/registerSW.js`（只有一句 `navigator.serviceWorker.register`）。那样新 worker 装上也没人刷新页面，用户会一直停在旧版本。删掉时构建不报错，只有线上更不动——`registerSW()` 的 autoUpdate 分支才带 `location.reload()`
+- iOS 把独立 PWA 挂起后唤醒不触发 `load`，所以 `onRegisteredSW` 里挂了 `visibilitychange` → `registration.update()` 主动查更新；`public/_headers` 给 `sw.js` / `index.html` / `manifest.webmanifest` 配了 `Cache-Control: no-cache`，`sw.js` 被 HTTP 缓存挡住的话整条更新链路就断了
 - 环境变量：`VITE_FIREBASE_*` + `VITE_PROXY_URL`（本地开发写 `.env.local`）
 - 移动端优先（375px 基准宽度），桌面端居中显示，最大宽度 430px
 - 极简风格，单一点缀色琥珀橙 `#BA7517`

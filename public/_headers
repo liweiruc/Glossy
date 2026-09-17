@@ -3,3 +3,15 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: geolocation=(), camera=(), microphone=()
+
+# 更新链路上的三个文件永远要回源校验。sw.js 尤其关键：浏览器就是靠重新拉它
+# 才发现有新版本，一旦被 iOS 的 HTTP 缓存挡住，整个 PWA 就再也更不动了。
+# /assets/* 里带 hash 的产物不在此列，它们照旧可以长期缓存。
+/sw.js
+  Cache-Control: no-cache
+
+/index.html
+  Cache-Control: no-cache
+
+/manifest.webmanifest
+  Cache-Control: no-cache
