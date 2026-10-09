@@ -18,6 +18,20 @@ function split(sentence: string, start: number, length: number): Part[] {
   return parts
 }
 
+const LETTER = /\p{L}/u
+
+// The first place `needle` stands as whole words, not inside a longer one: "ran" must not
+// be found in "Fran", nor "art" in "start". Review cards blank whatever is found, and half
+// a word would leave the rest of it on screen ("I'm ___ning late").
+function findWhole(haystack: string, needle: string): number {
+  for (let at = haystack.indexOf(needle); at >= 0; at = haystack.indexOf(needle, at + 1)) {
+    const before = haystack[at - 1]
+    const after = haystack[at + needle.length]
+    if (!(before && LETTER.test(before)) && !(after && LETTER.test(after))) return at
+  }
+  return -1
+}
+
 // Splits an example sentence so the word being taught can be marked inside it.
 //
 // Prefers the exact `target` the model returned. Entries cached before the prompt
@@ -29,7 +43,7 @@ export function markTarget(sentence: string, target: string | undefined, lemma: 
 
   for (const candidate of [target?.trim(), lemma.trim()]) {
     if (!candidate) continue
-    const at = lower.indexOf(candidate.toLowerCase())
+    const at = findWhole(lower, candidate.toLowerCase())
     if (at >= 0) return split(sentence, at, candidate.length)
   }
 

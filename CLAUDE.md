@@ -71,7 +71,7 @@ firestore.rules     Firestore 安全规则（需 firebase deploy 部署）
 - **英文优先**：中文默认折叠，点"中文"才展开，由 `chinese_display`（`always` / `tap` / `never`，默认 `tap`）控制。查词页、翻译浮层、复习卡揭晓面共用 `SenseBlock`（`src/components/SenseBlock.tsx`）——释义的排版只有这一处
 - **语境采集**（Home 的 Read 标签 → `/read/:id`）：粘贴的段落存进 `captures`，`findChunks()` 一次性问出值得整体学的短语并缓存在这条记录上；点词或短语走 `explainInContext()`，只解释它在**这句话**里的意思（`sentenceAt()` 负责切出那一句）。保存时写的是 `addContextCard()`——同一个义项再次遇到只往 `contexts` 里追加句子，不会多出一张卡
 - **卡片自带语境**：`WordSnapshot.contexts` 存用户自己遇到的句子，`pickWordCard()` 优先用它，词典例句退居其后（留给成熟卡的"没见过的新句子"）
-- **复习卡按熟练度换提问方式**：`pickWordCard()`（`src/algorithms/cards.ts`）返回 `context` / `cloze` / `fresh` / `bare`。只有在该义项完全没有例句时才退回光词头——有句子就绝不裸考单词
+- **复习卡一律挖空**：`pickWordCard()`（`src/algorithms/cards.ts`）返回 `cloze` / `fresh` / `bare`。有句子就把词挖掉、给英文释义作 Hint，让学习者想出这个词和它在句中的词形——不问 "What does it mean here?"；`fresh` 是成熟卡（reps ≥ 3）换一句没用过的句子再挖空。只有找不到能定位目标词的句子时才退回光词头——有句子就绝不裸考单词。挖空靠 `markTarget()` 定位，它只匹配整词，否则会挖掉半个词（"I'm ___ning late"）
 - **一张复习卡 = 一个义项**：`WordSnapshot.sense` 存单个 `Definition`，卡片身份是 `senseKey()`（词 + 释义原文）。拆分之前的老卡片带的是 `definitions: Definition[]`，**不迁移**——用 `snapshotSenses()` 读，两种形状都能渲染。新增入口：`addWordSense()`；查词页底栏和浮层的"全部加入"走 `addWordSenses()`——仍是一个义项一张卡，且写入前会重新读复习本、跳过已有的义项（别的设备可能刚同步过来），重复点不会产生重复卡
 - 查词页右上角的重新生成走 `generateWord()`：直接调 LLM 并覆盖本地和共享缓存（全体用户可见）。`lookupWord()` 会先命中缓存，永远不会重新生成
 - `word_cache` 带 `schema_version`（`WORD_CACHE_SCHEMA`，当前为 2）。给 prompt 加字段时把它 +1，且新字段必须可选：共享缓存里的旧条目不会批量重生成（每次都是付费调用），渲染必须能降级。`markTarget()`（`src/utils/highlight.ts`）就是这么处理缺 `target` 的老例句的

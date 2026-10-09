@@ -7,7 +7,7 @@ import { getDueItems, updateItemAfterRating, addReviewLog } from '../db/queries'
 import { useChineseDisplay } from '../db/settings'
 import { applyRating, previewInterval } from '../algorithms/sm2'
 import type { Rating } from '../algorithms/sm2'
-import { pickWordCard, cardPrompt } from '../algorithms/cards'
+import { pickWordCard, cardPrompt, sentenceSource } from '../algorithms/cards'
 import { markTarget } from '../utils/highlight'
 import SenseBlock from '../components/SenseBlock'
 
@@ -149,6 +149,7 @@ export default function ReviewSession() {
 
   /* ── Front face ── */
   if (phase === 'front') {
+    const answerWords = card?.answer ? card.answer.trim().split(/\s+/).length : 0
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh' }}>
         {appBar}
@@ -159,44 +160,36 @@ export default function ReviewSession() {
             animation: 'revealFade 0.2s ease',
           }}
         >
-          {card?.mode === 'fresh' ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+            {card?.mode === 'fresh' && (
               <span style={{
                 background: 'var(--bg-secondary)', borderRadius: 8,
                 padding: '4px 10px', fontSize: 13, color: 'var(--text-secondary)',
               }}>
                 new example
               </span>
-              <span style={{ fontSize: 14, color: 'var(--text-tertiary)' }}>
-                {cardPrompt('fresh', undefined)}
-              </span>
-            </div>
-          ) : (
-            <div style={{ fontSize: 14, color: 'var(--text-tertiary)' }}>
-              {card ? cardPrompt(card.mode, card.example?.target) : 'translate this sentence'}
-            </div>
-          )}
+            )}
+            <span style={{ fontSize: 14, color: 'var(--text-tertiary)' }}>
+              {card ? cardPrompt(card) : 'translate this sentence'}
+            </span>
+          </div>
 
           <div style={{ flex: 1 }} />
 
           {card && wordSnap && (
-            card.mode === 'bare' || !card.example ? (
+            card.example ? (
+              <div style={{
+                fontSize: 23, color: 'var(--text-primary)',
+                lineHeight: 1.7, maxWidth: 300, textAlign: 'center',
+              }}>
+                <ClozeSentence example={card.example} lemma={wordSnap.lemma} />
+              </div>
+            ) : (
               <div style={{
                 fontSize: 42, fontWeight: 500, color: 'var(--text-primary)',
                 letterSpacing: '-1px', textAlign: 'center',
               }}>
                 {wordSnap.lemma}
-              </div>
-            ) : (
-              <div style={{
-                fontSize: 23, color: 'var(--text-primary)',
-                lineHeight: 1.7, maxWidth: 300, textAlign: 'center',
-              }}>
-                {card.mode === 'cloze' ? (
-                  <ClozeSentence example={card.example} lemma={wordSnap.lemma} />
-                ) : (
-                  <MarkedSentence example={card.example} lemma={wordSnap.lemma} />
-                )}
               </div>
             )
           )}
@@ -210,8 +203,9 @@ export default function ReviewSession() {
             </div>
           )}
 
-          {/* Cloze gives the meaning as the cue; the others ask for it */}
-          {card?.mode === 'cloze' && card.sense && (
+          {/* A sentence card gives the meaning as the cue and asks for the word, in the
+              form the sentence needs. Only a bare card asks for a meaning. */}
+          {card?.example && card.sense && (
             <div style={{
               background: 'var(--bg-secondary)', borderRadius: 10,
               padding: '12px 14px', marginTop: 28, width: '100%', boxSizing: 'border-box',
@@ -225,19 +219,19 @@ export default function ReviewSession() {
               <div style={{ fontSize: 17, color: 'var(--text-primary)', lineHeight: 1.45 }}>
                 {card.sense.en}
               </div>
-              {card.example?.target?.includes(' ') && (
+              {answerWords > 1 && (
                 <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 6 }}>
-                  {card.example.target.trim().split(/\s+/).length} words
+                  {answerWords} words
                 </div>
               )}
             </div>
           )}
 
-          {card?.mode === 'cloze' ? (
+          {card?.example ? (
             <div style={{ height: 24 }} />
           ) : (
             <div style={{ fontSize: 16, color: 'var(--text-tertiary)', marginTop: 20, marginBottom: 24 }}>
-              {card && card.mode !== 'bare' && card.example ? 'What does it mean here?' : 'tap to reveal'}
+              tap to reveal
             </div>
           )}
           <button
@@ -264,15 +258,15 @@ export default function ReviewSession() {
       {appBar}
 
       <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 16 }}>
-        {/* Question stays visible at top — a cloze now shows the word it was hiding */}
+        {/* Question stays visible at top — the blank now shows the word it was hiding */}
         <div style={{ padding: '14px 18px 0' }}>
           <div style={{ fontSize: 14, color: 'var(--text-tertiary)', marginBottom: 8 }}>
-            {card ? cardPrompt(card.mode === 'cloze' ? 'context' : card.mode, undefined) : 'translate this sentence'}
+            {card ? (card.example ? sentenceSource(card.mode) : cardPrompt(card)) : 'translate this sentence'}
           </div>
           {card && wordSnap && (
             card.example ? (
               <div style={{ fontSize: 17, color: 'var(--text-secondary)', lineHeight: 1.55 }}>
-                <MarkedSentence example={card.example} lemma={wordSnap.lemma} emphasis />
+                <MarkedSentence example={card.example} lemma={wordSnap.lemma} />
               </div>
             ) : (
               <div style={{ fontSize: 36, fontWeight: 500, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>
@@ -292,8 +286,29 @@ export default function ReviewSession() {
 
         {/* Reveal content — opacity fade-in only */}
         <div style={{ animation: 'revealFade 0.15s ease both' }}>
-          {/* One sense per card: the meaning is the answer, so it leads. The word itself
-              was visible in the question, so it sits underneath as reference. */}
+          {/* A sentence card asked for the word, so the word is the answer and leads; the
+              meaning was the hint and follows at reading size. A bare card showed the word
+              and asked for the meaning, so there the meaning leads instead. */}
+          {wordSnap && card?.example && (
+            <div style={{
+              padding: '0 18px', marginBottom: 12,
+              display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+            }}>
+              <span style={{ fontSize: 36, fontWeight: 500, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>
+                {wordSnap.lemma}
+              </span>
+              {wordSnap.phonetic_us && (
+                <span style={{ fontSize: 16, color: 'var(--text-tertiary)' }}>{wordSnap.phonetic_us}</span>
+              )}
+              <button
+                onClick={() => speak(wordSnap.lemma)}
+                style={{ background: 'none', border: 'none', padding: 2, cursor: 'pointer', display: 'flex' }}
+              >
+                <Volume2 size={13} color="var(--amber-600)" />
+              </button>
+            </div>
+          )}
+
           {wordSnap && card?.sense && card.senses.length === 1 && (
             <div style={{ padding: '0 18px' }}>
               <SenseBlock
@@ -302,34 +317,14 @@ export default function ReviewSession() {
                   : card.sense}
                 lemma={wordSnap.lemma}
                 chinese={chinese}
-                size="answer"
+                size={card.example ? 'full' : 'answer'}
                 maxExamples={1}
               />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 17, color: 'var(--text-secondary)' }}>{wordSnap.lemma}</span>
-                {wordSnap.phonetic_us && (
-                  <span style={{ fontSize: 16, color: 'var(--text-tertiary)' }}>{wordSnap.phonetic_us}</span>
-                )}
-                <button
-                  onClick={() => speak(wordSnap.lemma)}
-                  style={{ background: 'none', border: 'none', padding: 2, cursor: 'pointer', display: 'flex' }}
-                >
-                  <Volume2 size={13} color="var(--amber-600)" />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Cards from before the per-sense split hold every sense at once */}
-          {wordSnap && card && card.senses.length > 1 && (
-            <>
-              <div style={{ padding: '0 18px 10px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                  {wordSnap.phonetic_uk && (
-                    <span style={{ fontSize: 16, color: 'var(--text-secondary)' }}>UK {wordSnap.phonetic_uk}</span>
-                  )}
+              {!card.example && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 17, color: 'var(--text-secondary)' }}>{wordSnap.lemma}</span>
                   {wordSnap.phonetic_us && (
-                    <span style={{ fontSize: 16, color: 'var(--text-secondary)' }}>US {wordSnap.phonetic_us}</span>
+                    <span style={{ fontSize: 16, color: 'var(--text-tertiary)' }}>{wordSnap.phonetic_us}</span>
                   )}
                   <button
                     onClick={() => speak(wordSnap.lemma)}
@@ -338,7 +333,32 @@ export default function ReviewSession() {
                     <Volume2 size={13} color="var(--amber-600)" />
                   </button>
                 </div>
-              </div>
+              )}
+            </div>
+          )}
+
+          {/* Cards from before the per-sense split hold every sense at once */}
+          {wordSnap && card && card.senses.length > 1 && (
+            <>
+              {/* With a sentence, the word heading above already carries the sound */}
+              {!card.example && (
+                <div style={{ padding: '0 18px 10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    {wordSnap.phonetic_uk && (
+                      <span style={{ fontSize: 16, color: 'var(--text-secondary)' }}>UK {wordSnap.phonetic_uk}</span>
+                    )}
+                    {wordSnap.phonetic_us && (
+                      <span style={{ fontSize: 16, color: 'var(--text-secondary)' }}>US {wordSnap.phonetic_us}</span>
+                    )}
+                    <button
+                      onClick={() => speak(wordSnap.lemma)}
+                      style={{ background: 'none', border: 'none', padding: 2, cursor: 'pointer', display: 'flex' }}
+                    >
+                      <Volume2 size={13} color="var(--amber-600)" />
+                    </button>
+                  </div>
+                </div>
+              )}
               <div style={{ padding: '0 18px' }}>
                 {snapshotSenses(wordSnap).map((def, i, senses) => (
                   <div
@@ -417,11 +437,9 @@ export default function ReviewSession() {
   )
 }
 
-// The sentence with the word being tested marked inside it. On the question side the
-// mark is all the emphasis there is; on the answer side the word also darkens.
-function MarkedSentence({ example, lemma, emphasis }: {
-  example: Example; lemma: string; emphasis?: boolean
-}) {
+// The answer side's copy of the sentence: the blank filled back in, and marked, so the
+// first thing the learner sees is whether the word they thought of was the right one.
+function MarkedSentence({ example, lemma }: { example: Example; lemma: string }) {
   return (
     <>
       {markTarget(example.en, example.target, lemma).map((part, i) =>
@@ -430,7 +448,7 @@ function MarkedSentence({ example, lemma, emphasis }: {
             key={i}
             style={{
               fontWeight: 600,
-              color: emphasis ? 'var(--text-primary)' : undefined,
+              color: 'var(--text-primary)',
               borderBottom: '2px solid var(--border-primary)',
             }}
           >

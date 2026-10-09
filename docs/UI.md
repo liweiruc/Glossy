@@ -353,24 +353,22 @@ CardFront（flex-1，居中布局）
 
 ### CardFront
 
-单词卡有四种形态，由 `pickWordCard()`（`src/algorithms/cards.ts`）按熟练度选出。只要手上有句子，就绝不光考一个孤零零的词——那正是这次改版要甩掉的习惯。
+单词卡有三种形态，由 `pickWordCard()`（`src/algorithms/cards.ts`）选出。只要手上有句子，就把词挖空、给出释义，让学习者自己想出这个词和它在句中的词形——不问 "What does it mean here?"，也绝不光考一个孤零零的词。
 
 | 形态 | 触发条件 | 正面长什么样 |
 |------|----------|--------------|
-| `context` | `repetitions === 0` | 保存时的那句话，目标词标出来，问 "What does it mean here?" |
-| `cloze` | `repetitions >= 1`，且目标词能在句中定位 | 同一句话，目标词挖空，英文释义作为 Hint 给出 |
-| `fresh` | `repetitions >= 3`，且该义项有多于一条例句 | 一句这张卡还没用过的例句，顶部挂 "new example" 标签 |
-| `bare` | 该义项没有可用例句（多为 schema 2 之前的老词条） | 退回原来的大字词头（42px） |
+| `cloze` | 默认（从第一次复习起），且句中能定位到目标词 | 保存时的那句话，目标词挖空，英文释义作为 Hint 给出 |
+| `fresh` | `repetitions >= 3`，且可用的句子多于一条 | 同样挖空，换一句这张卡还没用过的句子，顶部挂 "new example" 标签 |
+| `bare` | 没有一句能定位到目标词（多为 schema 2 之前的老词条） | 退回原来的大字词头（42px），回忆意思 |
 
 - 整个 Body 垂直水平居中
-- **ProgressHint**（顶部，14px 三级色）：`cardPrompt()` 给出，分别是 "from your saved sentence" / "fill in the missing word(s)" / "a sentence you have not seen before"（配 "new example" 胶囊：二级背景、圆角 8px、13px 次要色）/ "recall the meaning"；句子卡仍是 "translate this sentence"
+- **ProgressHint**（顶部，14px 三级色）：`cardPrompt()` 给出——`cloze` / `fresh` 是 "fill in the missing word"（答案是多词短语时为 "words"），`fresh` 上方另配 "new example" 胶囊（二级背景、圆角 8px、13px 次要色）；`bare` 是 "recall the meaning"；句子卡仍是 "translate this sentence"
 - **MainContent**：
-  - 单词卡（有句子）：例句 23px，行高 1.7，最大宽度 300px，居中；目标词 600 字重 + 2px 底线
-  - `cloze` 的挖空：`display: inline-block` 的空白，底线 2px，宽度按答案长度估算（64–190px）——透露长度，但不透露拼写
+  - 单词卡（有句子）：例句 23px，行高 1.7，最大宽度 300px，居中；目标词挖成 `display: inline-block` 的空白，底线 2px，宽度按答案长度估算（64–190px）——透露长度，但不透露拼写
   - 单词卡（`bare`）：英文单词，42px，weight 500，字母间距 -1px
   - 句子卡：中文原句，23px，行高 1.6，最大宽度 280px，居中
-- **Hint 框**（仅 `cloze`）：二级背景，圆角 10px，内边距 12px 14px；"HINT"（13px 三级色全大写）+ 英文释义（17px）；答案是多词短语时再加一行"N words"
-- **SubHint**：`context` / `fresh` 是 "What does it mean here?"（16px 三级色）；`bare` 保留 "tap to reveal"；`cloze` 不出这一行（Hint 框已经是提示）
+- **Hint 框**（有句子的单词卡）：二级背景，圆角 10px，内边距 12px 14px；"HINT"（13px 三级色全大写）+ 英文释义（17px）；答案是多词短语时再加一行 "N words"
+- **SubHint**：只有 `bare` 和句子卡有，"tap to reveal"（16px 三级色）；挖空卡不出这一行（Hint 框已经是提示）
 - **ShowButton**："Show answer"
   - 透明背景，0.5px 二级边框，圆角 8px，内边距 9px 22px，13px 正常色
   - 点击：卡片翻到揭晓面（动画：Y 轴 flip，duration 300ms）
@@ -394,17 +392,17 @@ RatingBar（固定底部）
 
 **问题区**（顶部，padding 14px 18px 0）：
 
-- 形态标签（14px 三级色）+ 刚才那句话（17px 次要色，行高 1.55），目标词转为正常色加粗
-- `cloze` 在这里把挖掉的词填回去——答案首先要看得见
-- `bare` 卡没有句子，这里显示词头（36px）
+- 句子来源（14px 三级色，`sentenceSource()`）："from your saved sentence" / "a sentence you have not seen before"
+- 刚才那句话（17px 次要色，行高 1.55），挖掉的词填回去，转为正常色加粗——答案首先要看得见：想到的词、用的词形对不对，一眼就能核对
+- `bare` 卡没有句子，这里是 "recall the meaning" + 词头（36px）
 
 **答案区**（padding 0 18px，可滚动）：
 
-- 释义**第一、最大**：`SenseBlock size="answer"`——词性 pill（13px）+ 释义 23px weight 500 + "中文"chip
-  - 正面已经出现过的那句例句会被排除，只补一条别的例句（有就补，没有就不补）
-- 释义下方才是词头和音标：单词 17px 次要色 + 音标 16px 三级色 + `Volume2`（13px 琥珀橙）
-  - 顺序是有意的：词本来就写在句子里，学习者要回忆的是意思，不是这个词长什么样
-- 拆分义项之前的老卡片（`definitions` 数组）走另一条分支：先音标行，再逐条 `SenseBlock size="compact"`，和改版前一致
+- 挖空卡（`cloze` / `fresh`）问的是词，所以**词头在最前**：单词 36px weight 500 + 音标 16px 三级色 + `Volume2`（13px 琥珀橙）
+  - 下面才是释义：`SenseBlock size="full"`（释义 17px）——它刚才已经作为 Hint 出现过，这里退回正常阅读字号
+- `bare` 卡问的是意思，所以**释义第一、最大**：`SenseBlock size="answer"`——词性 pill（13px）+ 释义 23px weight 500 + "中文"chip；下方才是单词 17px 次要色 + 音标 16px 三级色 + `Volume2`
+- 两种都只补一条别的例句：正面已经出现过的那句会被排除（有就补，没有就不补）
+- 拆分义项之前的老卡片（`definitions` 数组）走另一条分支：逐条 `SenseBlock size="compact"`；挖空卡上方照样有词头，`bare` 卡则先出 UK/US 音标行
 - 注意：此处用的是 snapshot 快照，不是缓存中的当前数据
 
 ### 句子卡揭晓面
