@@ -4,8 +4,10 @@ import { ChevronLeft, RefreshCw, Volume2, Check, Undo2 } from 'lucide-react'
 import type { WordCache, Definition } from '../db'
 import { lookupWord, getCachedWord, generateWord } from '../api/lookup'
 import { getErrorMessage } from '../api/llm'
-import { addWordSense, deleteReviewItem, getAddedSenseKeys, senseKey } from '../db/queries'
+import { addWordSense, addWordSenses, deleteReviewItem, getAddedSenseKeys, senseKey } from '../db/queries'
+import type { AddedSense } from '../db/queries'
 import { useChineseDisplay } from '../db/settings'
+import AddAllButton from '../components/AddAllButton'
 import AddSenseButton from '../components/AddSenseButton'
 import ErrorBanner from '../components/ErrorBanner'
 import SenseBlock from '../components/SenseBlock'
@@ -26,7 +28,8 @@ export default function LookupResult() {
   const [retryable, setRetryable] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [addedKeys, setAddedKeys] = useState<Set<string>>(new Set())
-  const [lastAdded, setLastAdded] = useState<{ id: string; sense: Definition } | null>(null)
+  const [lastAdded, setLastAdded] = useState<AddedSense[]>([])
+  const [addingAll, setAddingAll] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [retryKey, setRetryKey] = useState(0)
   const [popupWord, setPopupWord] = useState<string | null>(null)
@@ -85,18 +88,40 @@ export default function LookupResult() {
     if (!wordData || addedKeys.has(senseKey(wordData.lemma, sense))) return
     const id = await addWordSense(wordData, sense)
     setAddedKeys(prev => new Set([...prev, senseKey(wordData.lemma, sense)]))
-    setLastAdded({ id, sense })
+    setLastAdded([{ id, sense }])
   }
 
+  async function handleAddAll() {
+    if (!wordData || addingAll) return
+    setAddingAll(true)
+    try {
+      const added = await addWordSenses(wordData, wordData.definitions)
+      // Every sense is in the book now, whether this tap added it or it already was.
+      setAddedKeys(prev => new Set([
+        ...prev,
+        ...wordData.definitions.map(def => senseKey(wordData.lemma, def)),
+      ]))
+      if (added.length) setLastAdded(added)
+      // Unfold the list, so every sense that just went in is on screen with its tick.
+      setExpanded(true)
+    } catch (err) {
+      setErrorMsg(getErrorMessage(err))
+      setRetryable(false)
+    } finally {
+      setAddingAll(false)
+    }
+  }
+
+  // Takes back the last tap, whether that was one + or the whole batch.
   async function handleUndoAdd() {
-    if (!wordData || !lastAdded) return
-    await deleteReviewItem(lastAdded.id)
+    if (!wordData || !lastAdded.length) return
+    await Promise.all(lastAdded.map(card => deleteReviewItem(card.id)))
     setAddedKeys(prev => {
       const next = new Set(prev)
-      next.delete(senseKey(wordData.lemma, lastAdded.sense))
+      for (const card of lastAdded) next.delete(senseKey(wordData.lemma, card.sense))
       return next
     })
-    setLastAdded(null)
+    setLastAdded([])
   }
 
   // Overwrites the shared cache, so everyone gets the new entry — the point of the
@@ -105,7 +130,7 @@ export default function LookupResult() {
     if (!wordData || refreshing) return
     setRefreshing(true)
     setErrorMsg(null)
-    setLastAdded(null)
+    setLastAdded([])
     try {
       const fresh = await generateWord(wordData.lemma)
       setWordData(fresh)
@@ -123,6 +148,9 @@ export default function LookupResult() {
   const definitions = wordData?.definitions ?? []
   const visibleDefs = expanded ? definitions : definitions.slice(0, 3)
   const hiddenCount = definitions.length - 3
+  const remaining = wordData
+    ? definitions.filter(def => !addedKeys.has(senseKey(wordData.lemma, def))).length
+    : 0
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh' }}>
@@ -256,37 +284,56 @@ export default function LookupResult() {
         )}
       </div>
 
-      {/* Confirmation bar — the + on each sense is the action; this is its receipt */}
-      {lastAdded && (
+      {/* Footer — the + on each sense adds that one, the button adds whatever is left,
+          and the receipt above it names what went in last, with an undo */}
+      {wordData && definitions.length > 0 && (
         <div style={{
           borderTop: '0.5px solid var(--border-tertiary)',
           padding: '10px 18px 14px',
           flexShrink: 0,
           background: 'var(--bg-primary)',
-          display: 'flex', alignItems: 'center', gap: 10,
         }}>
-          <Check size={16} color="var(--amber-600)" style={{ flexShrink: 0 }} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 17, color: 'var(--text-primary)' }}>Added to review</div>
-            <div style={{
-              fontSize: 14, color: 'var(--text-secondary)',
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-            }}>
-              {lastAdded.sense.pos} {lastAdded.sense.en}
+          {lastAdded.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <Check size={16} color="var(--amber-600)" style={{ flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 17, color: 'var(--text-primary)' }}>Added to review</div>
+                <div style={{
+                  fontSize: 14, color: 'var(--text-secondary)',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>
+                  {lastAdded.length === 1
+                    ? `${lastAdded[0].sense.pos} ${lastAdded[0].sense.en}`
+                    : `${lastAdded.length} meanings of ${wordData.lemma}`}
+                </div>
+              </div>
+              <button
+                onClick={handleUndoAdd}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 4,
+                  fontSize: 17, color: 'var(--amber-600)', fontFamily: 'inherit',
+                  flexShrink: 0, padding: '4px 0',
+                }}
+              >
+                <Undo2 size={14} />
+                Undo
+              </button>
             </div>
-          </div>
-          <button
-            onClick={handleUndoAdd}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: 4,
-              fontSize: 17, color: 'var(--amber-600)', fontFamily: 'inherit',
-              flexShrink: 0, padding: '4px 0',
-            }}
-          >
-            <Undo2 size={14} />
-            Undo
-          </button>
+          )}
+
+          {/* With the receipt up and nothing left, a greyed "All meanings added" under it
+              would only say the same thing twice. */}
+          {(lastAdded.length === 0 || remaining > 0) && (
+            <div style={{ display: 'flex', marginTop: lastAdded.length > 0 ? 10 : 0 }}>
+              <AddAllButton
+                total={definitions.length}
+                remaining={remaining}
+                busy={addingAll}
+                onAdd={handleAddAll}
+              />
+            </div>
+          )}
         </div>
       )}
 

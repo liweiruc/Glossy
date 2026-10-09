@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { X, Volume2, Plus, Check } from 'lucide-react'
+import { X, Volume2 } from 'lucide-react'
 import type { WordCache, Definition } from '../db'
 import { lookupWord } from '../api/lookup'
 import { getErrorMessage } from '../api/llm'
-import { addWordSense, getAddedSenseKeys, senseKey } from '../db/queries'
+import { addWordSense, addWordSenses, getAddedSenseKeys, senseKey } from '../db/queries'
 import { useChineseDisplay } from '../db/settings'
 import { useToast } from './Toast'
+import AddAllButton from './AddAllButton'
 import AddSenseButton from './AddSenseButton'
 import SenseBlock from './SenseBlock'
 
@@ -23,6 +24,7 @@ export default function WordPopup({ word, onClose }: Props) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [addedKeys, setAddedKeys] = useState<Set<string>>(new Set())
+  const [adding, setAdding] = useState(false)
 
   useEffect(() => {
     setLoading(true)
@@ -45,6 +47,27 @@ export default function WordPopup({ word, onClose }: Props) {
     showToast('Added to review')
   }
 
+  // Adds every sense, including the ones past the two shown here: the button's label
+  // says how many, and the + on each sense is still there for picking just one.
+  async function handleAddAll() {
+    if (!wordData || adding) return
+    setAdding(true)
+    try {
+      const added = await addWordSenses(wordData, wordData.definitions)
+      setAddedKeys(prev => new Set([
+        ...prev,
+        ...wordData.definitions.map(def => senseKey(wordData.lemma, def)),
+      ]))
+      if (added.length) {
+        showToast(added.length === 1 ? 'Added to review' : `Added ${added.length} meanings to review`)
+      }
+    } catch (err) {
+      showToast(getErrorMessage(err))
+    } finally {
+      setAdding(false)
+    }
+  }
+
   function handleOpenFull() {
     onClose()
     if (wordData) navigate('/lookup/' + wordData.lemma)
@@ -59,9 +82,11 @@ export default function WordPopup({ word, onClose }: Props) {
     window.speechSynthesis.speak(utt)
   }
 
-  const visibleDefs = (wordData?.definitions ?? []).slice(0, 2)
-  const firstSense = visibleDefs[0]
-  const firstAdded = !!wordData && !!firstSense && addedKeys.has(senseKey(wordData.lemma, firstSense))
+  const senses = wordData?.definitions ?? []
+  const visibleDefs = senses.slice(0, 2)
+  const remaining = wordData
+    ? senses.filter(def => !addedKeys.has(senseKey(wordData.lemma, def))).length
+    : 0
 
   return (
     <>
@@ -168,25 +193,15 @@ export default function WordPopup({ word, onClose }: Props) {
               borderTop: '0.5px solid var(--border-tertiary)',
               marginTop: 12, paddingTop: 12,
             }}>
-              {/* The + on each sense is the precise action; this adds the first sense,
-                  which is the most common one and what a hurried tap means. */}
-              <button
-                onClick={() => firstSense && handleAddSense(firstSense)}
-                disabled={!firstSense || firstAdded}
-                style={{
-                  flex: 1,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                  background: firstAdded ? 'var(--bg-secondary)' : 'var(--amber-600)',
-                  color: firstAdded ? 'var(--text-secondary)' : '#fff',
-                  border: 'none', borderRadius: 8, padding: '9px 0',
-                  fontSize: 17, fontWeight: 500,
-                  cursor: firstAdded ? 'default' : 'pointer',
-                  fontFamily: 'inherit',
-                }}
-              >
-                {firstAdded ? <Check size={12} /> : <Plus size={12} />}
-                {firstAdded ? 'Added' : 'Add first meaning'}
-              </button>
+              {senses.length > 0 && (
+                <AddAllButton
+                  compact
+                  total={senses.length}
+                  remaining={remaining}
+                  busy={adding}
+                  onAdd={handleAddAll}
+                />
+              )}
               <button
                 onClick={handleOpenFull}
                 style={{

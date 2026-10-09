@@ -146,15 +146,13 @@ export async function addContextCard(
   return id
 }
 
-// Adds one sense as its own card. Returns the id so the caller can offer an undo.
-export async function addWordSense(
+function newWordCard(
   word: Pick<WordCache, 'lemma' | 'phonetic_uk' | 'phonetic_us'>,
   sense: Definition,
-): Promise<string> {
-  const now = Date.now()
-  const id = crypto.randomUUID()
-  await addReviewItem({
-    id,
+  addedAt: number,
+): ReviewItem {
+  return {
+    id: crypto.randomUUID(),
     type: 'word',
     snapshot: {
       lemma: word.lemma,
@@ -165,11 +163,53 @@ export async function addWordSense(
     ease_factor: 2.5,
     interval_days: 0,
     repetitions: 0,
-    due_at: now,
-    added_at: now,
+    due_at: addedAt,
+    added_at: addedAt,
     last_reviewed_at: null,
+  }
+}
+
+// Adds one sense as its own card. Returns the id so the caller can offer an undo.
+export async function addWordSense(
+  word: Pick<WordCache, 'lemma' | 'phonetic_uk' | 'phonetic_us'>,
+  sense: Definition,
+): Promise<string> {
+  const item = newWordCard(word, sense, Date.now())
+  await addReviewItem(item)
+  return item.id
+}
+
+export interface AddedSense {
+  id: string
+  sense: Definition
+}
+
+// "Add all": every sense not already in the review book, still one card each — the cards
+// tapping each + would have made, not a way back to whole-word cards. Checks the book
+// itself rather than the caller's view of it: a card can sync in from another device
+// after a page loads, and a duplicate would be reviewed twice.
+// Returns only what it added, so an undo takes back exactly this batch.
+export async function addWordSenses(
+  word: Pick<WordCache, 'lemma' | 'phonetic_uk' | 'phonetic_us'>,
+  senses: Definition[],
+): Promise<AddedSense[]> {
+  const have = await getAddedSenseKeys(word.lemma)
+  const fresh = senses.filter(sense => {
+    const key = senseKey(word.lemma, sense)
+    if (have.has(key)) return false
+    have.add(key)
+    return true
   })
-  return id
+
+  // A millisecond apart, so newest-first lists keep the entry's order.
+  const now = Date.now()
+  const items = fresh.map((sense, i) => newWordCard(word, sense, now - i))
+  await db.review_items.bulkAdd(items)
+  const u = uid()
+  if (u) {
+    for (const item of items) pushReviewItem(u, item).catch(e => console.error('[Firestore sync]', e))
+  }
+  return items.map((item, i) => ({ id: item.id, sense: fresh[i] }))
 }
 
 export async function deleteReviewItem(id: string): Promise<void> {
