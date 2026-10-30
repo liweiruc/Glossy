@@ -25,8 +25,8 @@
 /src
   /auth             Firebase Auth 上下文（AuthContext.tsx）
   /components       可复用 UI 组件
-  /pages            页面级组件（Home、Lookup、Translate、CaptureText、Review、Library、Settings、Login、Register）
-  /db               Dexie schema（index.ts）、查询层（queries.ts）、Firestore 同步层（firestore-sync.ts）、词库（library.ts）、设置（settings.ts）
+  /pages            页面级组件（Home、Lookup、Translate、CaptureText、Review、Library、Stats、Settings、Login、Register）
+  /db               Dexie schema（index.ts）、查询层（queries.ts）、Firestore 同步层（firestore-sync.ts）、词库（library.ts）、统计（stats.ts）、设置（settings.ts）
   /algorithms       FSRS 调度（fsrs.ts）、复习队列与会话、作答判定等核心算法
   /api              调用 Worker 代理（llm.ts）与错误处理
   /prompts          查词、翻译、语境采集的 prompt 文本（独立文件，便于迭代）
@@ -80,6 +80,7 @@ firestore.rules     Firestore 安全规则（需 firebase deploy 部署）
 - **调度是 FSRS**（`ts-fsrs`，`src/algorithms/fsrs.ts`；默认参数同 wordloom：保留率 0.9、学习步骤 1m / 10m、重学 10m、开 fuzz、最长 36500 天。保留率、最长间隔和两组步骤可在复习设置里改，所以 `previewRatings(item, now, settings)` 必须传设置；retrievability 只用默认参数算，与设置无关）。`ReviewItem` 平铺存 ts-fsrs Card 的字段（`state` / `stability` / `difficulty` / `elapsed_days` / `scheduled_days` / `learning_steps` / `reps` / `lapses`），两个日期沿用 `due_at` / `last_reviewed_at`；`ReviewLog` 记 `rating`、评分**前**的 `state`（0 = 这张卡第一次评）和 `reviewed_at`。读卡经 `withSchedule()` / `scheduleOf()`，建卡用 `newSchedule()`——别再手写默认字段。复习页只有今天这一轮和统计，不列卡片；数字（今日复习数、新学数、首答记住率、明日到期、连续天数）全部由 `getReviewOverview()` 从 `review_logs` 现算、只读；作答判定结果不落库
 - **复习设置**（Settings → Review；`ReviewSettings`，`src/db/settings.ts`）：每天新卡 / 复习上限、目标保留率（0.80–0.97）、最长间隔、学习 / 重学步骤（`1m 10m` 这样，正整数 + m/h/d，可为空）、新卡顺序、自动发音（介绍卡出现、揭晓答案时读出单词）。学习设置跟账号走：存 Firestore `users/{uid}/prefs/review`，本地 `settings` 只是镜像；中文显示仍是本机偏好。读写都过 `normalizeReviewSettings()`（夹范围、校验步骤、坏值退回默认）——各设备跑的版本可能不同，一个坏值不能卡住队列和调度器。`setReviewSettings(patch)` 在一个 Dexie 事务里读-合并-写再整份推到 Firestore，几乎同时的两次保存不会互相覆盖。会话开场读一次（`getTodayQueue(settings)`、`new StudySession(deps, entries, settings)`），这一轮里改设置下一轮才生效。设置页数字框失焦 / 回车才存，滑杆用原生 `change` 事件松手才存（React 的 onChange 拖动中每一步都触发），步骤写错就留在框里标红、不存
 - **词库**（Library，`/library`，取代 History；`/history` 重定向过来）：Words / Sentences / Passages 三栏，各有搜索、状态筛选（段落没有）和排序（Recent / A–Z / Next review，段落没有 Next review）。`loadLibrary()`（`src/db/library.ts`）把 history 和复习卡按词（词头小写）/ 句子（`hashText(source_text)`）归成一条；状态 `entryStatus()` 按条目算：没卡 = 未加入，有卡在学习步骤 = 学习中，全是新卡 = 新，全是成熟卡（`isMature()`：Review 且 stability ≥ 21 天）= 已掌握，其余 = 复习中。每张卡一格进度条（新 / 学过 / 成熟），新卡的到期栏显示 `new`。tab / status / sort / q 存在 URL 参数里，但搜索框本身是本地 state——由 URL 驱动的受控输入会在路由 transition 里丢字。左滑删除删的是这条的全部 history 行和全部卡（复习日志保留，缓存绝不动）；段落删的是 capture。「+ add」走 `addWordSenses()` / `addTranslationCard()`，都会先查重。空状态的图标要 `display: block; margin: 0 auto`——Tailwind preflight 把 svg 设成块级，`text-align: center` 居中不了
+- **统计**（Stats，`/stats`，BottomNav 第四个 tab，仿 wordloom 的"统计"）：`loadStats()`（`src/db/stats.ts`）从本地 `review_items` / `review_logs` 和复习设置现算，只读、不建汇总表，`useLiveQuery` 驱动。口径一律跟已有页面对齐，别另起一套：连续天数取 `getReviewOverview()`；到期预测的 Today 是今天这一轮还剩的 Due + Learning、Tomorrow 就是复习页的 Tomorrow，第三天起才按 `due_at` 数，新卡不算（何时出由每日上限决定）；首答记住率 = 每张卡当天第一次作答没按 Again，同复习页；词的状态走 `entryStatus()`、已掌握走 `isMature()`，同词库；真实保持率只算作答时处于 Review 状态的日志。图表是 `src/components/Charts.tsx` 里手写的 SVG（不引图表库）：按容器宽度画，点 / 横滑 / 悬停 / 方向键选中一列，数字写在图上方的读数里，带表格切换。配色是验证过的一条琥珀色阶：卡片状态 新 = 灰轨道、学习中 `--amber-400`、复习中 `--amber-700`、已掌握 `--amber-950`，热力图 400 / 600 / 700 / 950，单一数据的图只用 600。相邻的 400 和 600 正常视力下都难分，不能当堆叠图的两段——每日复习量因此只分 Due（700）和 Learning（400）
 - 会话页根节点的 `onMouseDown` 拦掉了按钮的鼠标聚焦：桌面浏览器会把焦点留在点过的按钮上，之后按 Enter 按的是它（再折一次"中文"、再撤一张卡），而不是检查 / 评分。别删；键盘 Tab 聚焦不受影响
 - **一张复习卡 = 一个义项**：`WordSnapshot.sense` 存单个 `Definition`，卡片身份是 `senseKey()`（词 + 释义原文）。拆分之前的老卡片带的是 `definitions: Definition[]`，**不迁移**——用 `snapshotSenses()` 读，两种形状都能渲染。新增入口：`addWordSense()`；查词页底栏和浮层的"全部加入"走 `addWordSenses()`——仍是一个义项一张卡，且写入前会重新读复习本、跳过已有的义项（别的设备可能刚同步过来），重复点不会产生重复卡
 - 查词页右上角的重新生成走 `generateWord()`：直接调 LLM 并覆盖本地和共享缓存（全体用户可见）。`lookupWord()` 会先命中缓存，永远不会重新生成
@@ -116,15 +117,15 @@ firestore.rules     Firestore 安全规则（需 firebase deploy 部署）
 
 | px  | 用途 |
 |-----|------|
-| 13  | BottomNav 标签、词性标签（POS chip） |
+| 13  | BottomNav 标签、词性标签（POS chip）、图表坐标轴 |
 | 14  | 时间戳、分组标题、例句文本 |
 | 16  | 音标、功能按钮、错误提示文字 |
 | 17  | 正文、释义、Toast、按钮文字 |
 | 18  | 输入框、列表项标题、主操作按钮 |
 | 21  | 搜索输入框、复习卡的释义与作答输入框 |
-| 23  | AppBar 标题（Glossy / Review / Library）、复习卡挖空句、统计格数字 |
+| 23  | AppBar 标题（Glossy / Review / Library / Stats）、复习卡挖空句、统计格数字 |
 | 29  | WordPopup 词头、复习完成屏标题 |
-| 36  | 登录/注册 Logo、复习揭晓的词头、复习页今日数字 |
+| 36  | 登录/注册 Logo、复习揭晓的词头、复习页今日数字、统计页保持率 |
 | 39  | LookupResult 词头 |
 | 42  | 复习介绍卡（IntroCard）词头 |
 

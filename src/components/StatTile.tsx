@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 
-// One number with its label: the Review tab's day at a glance, and the end of a session.
+// One number with its label: the Review tab's day at a glance, the end of a session, and
+// the top of the Stats tab.
 export default function StatTile({ label, value, sub }: { label: string; value: ReactNode; sub?: string }) {
   return (
     <div style={{

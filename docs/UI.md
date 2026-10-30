@@ -11,11 +11,12 @@
 
 位置：固定在屏幕底部，所有主屏幕共用。
 
-三个 tab，从左到右：
+四个 tab，从左到右：
 
 - **Home**：图标 `Home`，文字"Home"
 - **Review**：图标 `BookOpen`，文字"Review"
 - **Library**：图标 `Library`，文字"Library"（原 History；旧地址 `/history` 重定向到 `/library`）
+- **Stats**：图标 `ChartColumn`，文字"Stats"
 
 样式规则：
 
@@ -727,6 +728,119 @@ SenseSheet（点词后从底部升起）
 
 ---
 
+## 屏幕 13：统计（Stats）
+
+路由：`/stats`，需登录。仿 wordloom 的"统计"：复习页只看今天，这里看长期。全部数字由 `loadStats()`（`src/db/stats.ts`）从本地 `review_items` / `review_logs` 和复习设置现算，只读不写；live query 驱动，别的设备上复习完，这里跟着变。
+
+### 布局
+
+```
+AppBar（高 48px）
+  左："Stats"（23px weight500）
+Body（padding 水平 18px，可滚动）
+  StatTiles（2×2）
+  Cards
+  Retention
+  Calendar
+  "ACTIVITY" 分组标题 + 范围切换（30 days / 90 days）
+  Reviews per day
+  First-try recall
+  "MEMORY" 分组标题
+  Coming up
+  Memory strength
+  Hardest words
+BottomNav（Stats 激活）
+```
+
+### StatTiles
+
+复用复习页的 `StatTile`，两列，gap 10px：
+
+- Words studied：学过的词（按词头归并，至少一个义项已经开始学），副行 "N mastered"（全部义项都已掌握）
+- Streak：连续天数（与复习页同一个数），副行 "best N days"
+- Recall now：复习中的卡（Review / Relearning）此刻的平均可提取度，FSRS 的预测；副行 "predicted, N cards"，还没有这样的卡时显示 "—"
+- Reviews：累计作答次数，副行 "on N days"
+
+### Panel（每张图的卡片）
+
+- 0.5px 二级色边框，圆角 14px，内边距 16px，下间距 12px
+- 标题 17px weight 500；说明 14px 次要色；右上角可放一个数（14px 三级色，如 "62 cards"）
+- 图表卡右上角是表格切换（`Table2` / `ChartColumn`，18px 三级色）：换成同一组数字的表格（14px 等宽数字，表头 13px 三级色并吸顶，最高 300px 内部滚动）——不点图也能读到每一个数
+
+### 读数（Readout）
+
+图上方两行字（14px），高度固定，选中时图不跳：
+
+- 没选中时是这张图的总结，选中一列（一天）时换成它的数字
+- 选中：手指点一下（再点同一列取消）、按住横滑、鼠标悬停（移出取消）、方向键（Esc 取消）；竖向滑动照常滚动页面（`touch-action: pan-y`）
+- `aria-live="polite"`，读屏会读出变化
+- 被选中的柱子以外的柱子变淡（35%）；折线图画一道竖线和圆点
+
+### Cards
+
+- 右上角 "N cards"；说明 "Mastered once a card should stay remembered for three weeks"
+- 一根 8px 分段条（段间 2px 白缝），下方 2×2：New / Learning / Reviewing / Mastered，各有色块、数量（18px weight 500）和占比（14px 三级色）
+- 口径同词库：学习中 = Learning / Relearning，已掌握 = `isMature()`（Review 且 stability ≥ 21 天）
+- 颜色：New 灰轨道色，Learning `--amber-400`，Reviewing `--amber-700`，Mastered `--amber-950`；页面里别的图用到卡片状态时颜色相同
+
+### Retention
+
+- 最近 30 天里，作答时处于 Review 状态的卡没按 Again 的比例（真实保持率）：36px weight 500，旁边 "target 90%"（复习设置的目标保留率）
+- Meter：8px，`--amber-50` 轨道 + 琥珀填充，目标处一道 2px 深色刻度
+- "405 of 489 reviews remembered."；比目标低 5 个百分点以上时接一句 "Well below your target — fewer new cards a day may help."（同 wordloom）
+- 还没有卡到期复习过时，换成一段说明
+
+### Calendar
+
+- 最近 26 周的热力图：一列一周，周一在上；左侧 M / W / F，上方月份（13px 三级色）
+- 0 次是灰轨道色，其余按最忙那天的四分之一分四档（`--amber-400` / `600` / `700` / `950`）；右下角图例写出每档范围
+- 读数："Studied on N of the last M days" / "N reviews"；选中某天："N reviews" / 日期；方向键左右跨一周、上下跨一天
+- 表格只列有复习的日子，最近的在上
+
+### 范围切换
+
+"ACTIVITY" 标题右侧的分段控件（设置页 Segmented 的样式，14px，内边距 6px 12px）：30 days / 90 days，存在 URL 参数 `range`（默认 30 不写）。只管下面两张图。
+
+### Reviews per day
+
+- 每天的作答次数，堆叠柱：下段 Due（作答时处于 Review 状态，`--amber-700`），上段 Learning（新卡和学习 / 重学步骤里的卡，`--amber-400`），段间 2px 白缝；图例在读数上方
+- 纵轴在右，刻度取 0 加两到三格整数，顶格刚好盖过最高的柱子
+- 横轴最右是 "Today"，往前每 7 天（90 天时每 28 天）一个日期，每个标签居中在自己那一列下
+- 读数："862 reviews in the last 30 days" / "studied on 28 days"；选中："32 reviews — 21 due · 11 learning" / 日期 · 其中几张新卡
+- 表格：Day / Due / Learning / New / Total
+
+### First-try recall
+
+- 每张卡当天第一次作答没按 Again 的比例（同复习页的首答记住率）：30 天按天，90 天按自然周（周一开始，最早那周可能不满，本周还没过完）
+- 折线 2px + 10% 琥珀浅底，没有作答的日子断开；最新的点画圆点
+- 目标保留率是一条虚线，数值标在右侧刻度里——标在图里会压在折线上；和 100% 挨得太近时 100% 让位
+- 表格：Day（或 Week）/ Cards / Remembered / Recall
+
+### Coming up
+
+- 学过的卡未来 30 天每天到期多少张，单色柱（`--amber-600`）
+- Today = 今天这一轮还剩的 Due + Learning，Tomorrow = 复习页的 Tomorrow（已含每天上限和"一个词一天一卡"留下的），之后按到期日数；新卡不算，它们何时出由每日上限决定
+- 读数："9 due tomorrow" / "18 cards in the next 7 days"
+
+### Memory strength
+
+- 复习中的卡按 stability 分六组：Under a day / 1–7 days / 1–3 weeks / 3 weeks – 3 months / 3 months – 1 year / Over a year
+- 横向条形列表：组名（14px 次要色）+ 8px 琥珀条（按最多那组的比例）+ 数量（16px）；每个数都写出来，不用点
+- 右上角 "N cards"；没有复习中的卡时换成一段说明
+
+### Hardest words
+
+- 至少答过 3 次、按过 Again 的词，按遗忘次数（各义项 lapses 之和）降序、记住率升序，取前 10
+- 每行：词（17px）+ 释义（14px 次要色，单行省略）| Forgot | Reviews | Recall（16px 等宽数字）
+- 有义项 lapses ≥ 8 的词，词后加红色 "stubborn"（13px，`#dc2626`）：同样的复习再来多少次也难有起色
+- 点一行跳 `/lookup/:lemma`（走缓存，不调 LLM）；没有时显示 "None yet. Words you get wrong show up here."
+
+### 空状态
+
+一张卡、一条复习记录都没有时：`ChartColumn` 图标（36px 三级色，块级居中）+ "No stats yet"（18px weight 500）+ 一句说明 + "Look up a word" 按钮（琥珀橙）→ 回首页
+
+---
+
 ## 交互状态汇总
 
 | 状态 | 描述 |
@@ -735,5 +849,6 @@ SenseSheet（点词后从底部升起）
 | Error | AppBar 下方显示错误横幅，包含错误原因和重试建议 |
 | Empty（复习本无内容） | 复习页显示空状态："Nothing to review yet" + "Look up a word" 按钮（屏幕 5） |
 | Empty（词库无内容） | 词库各栏显示空状态："No words yet" / "No sentences yet" / "No passages yet"；搜索、筛选没结果时 "Nothing matches"（屏幕 8） |
+| Empty（统计无内容） | 没有卡也没有复习记录时："No stats yet" + "Look up a word" 按钮；有卡但还没复习过时各图照常显示，空的几块换成一句说明（屏幕 13） |
 | Offline（缓存命中） | 正常展示，无特殊提示 |
 | Offline（需要 LLM） | 错误横幅："当前无网络连接，无法获取新内容" |

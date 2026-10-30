@@ -94,13 +94,24 @@ export interface ReviewOverview {
 const DAY_MS = 86_400_000
 
 // The Review tab's numbers, worked out from the cards the caller already holds plus the
-// logs. Read-only: nothing here writes.
-export async function getReviewOverview(items: ReviewItem[], settings: QueueSettings): Promise<ReviewOverview> {
+// logs. Read-only: nothing here writes. A caller that has read every log already (the
+// Stats tab) passes them in, oldest first, and they are not read again: with a year of
+// reviews, that read is most of the time this takes.
+export async function getReviewOverview(
+  items: ReviewItem[],
+  settings: QueueSettings,
+  allLogs?: ReviewLog[],
+): Promise<ReviewOverview> {
   const today = startOfToday()
-  const [todayLogs, reviewTimes] = await Promise.all([
-    getTodayLogs(),
-    db.review_logs.where('reviewed_at').above(today - 400 * DAY_MS).keys(),
-  ])
+  const [todayLogs, reviewTimes] = allLogs
+    ? [
+        allLogs.filter(log => log.reviewed_at >= today),
+        allLogs.filter(log => log.reviewed_at > today - 400 * DAY_MS).map(log => log.reviewed_at),
+      ]
+    : await Promise.all([
+        getTodayLogs(),
+        db.review_logs.where('reviewed_at').above(today - 400 * DAY_MS).keys(),
+      ])
 
   // A card's first answer of the day is the honest one: any later try comes right after
   // the answer was shown.

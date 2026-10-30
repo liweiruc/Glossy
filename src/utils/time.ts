@@ -17,6 +17,35 @@ export function startOfToday(): number {
   return d.getTime()
 }
 
+export function startOfDay(ts: number): number {
+  const d = new Date(ts)
+  d.setHours(0, 0, 0, 0)
+  return d.getTime()
+}
+
+// `n` calendar days after the midnight `day`. Stepping the date rather than adding 24 hours
+// keeps every step on a midnight across a daylight-saving change.
+export function addDays(day: number, n: number): number {
+  const d = new Date(day)
+  d.setDate(d.getDate() + n)
+  return d.getTime()
+}
+
+// The Monday the week of the midnight `day` starts on.
+export function startOfWeek(day: number): number {
+  return addDays(day, -((new Date(day).getDay() + 6) % 7))
+}
+
+// "Tue, Oct 28"
+export function shortDate(ts: number): string {
+  return new Date(ts).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+}
+
+// "Oct 28"
+export function monthDay(ts: number): string {
+  return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
 // Cards are due for the whole calendar day they fall on, matching dueLabel: a 1-day
 // interval set at 9pm is reviewable the next morning. Comparing against Date.now()
 // instead showed "All caught up!" while rows still read "due today".
