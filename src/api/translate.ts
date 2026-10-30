@@ -19,7 +19,7 @@ interface LLMTranslateResponse {
 }
 
 // The cache tiers alone, keyed by source hash — see getCachedWord for why screens
-// opened from History or the review book need the shared tier too.
+// opened from the Library need the shared tier too.
 export async function getCachedTranslation(source_hash: string): Promise<TranslationCache | null> {
   const local = await db.translation_cache.get(source_hash)
   if (local) return local

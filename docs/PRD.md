@@ -25,7 +25,7 @@ Glossy 是一款专注于"查得到、记得住"的英语学习工具。区别�
 
 - **查得快**：本地缓存所有查过的词，再次查询无需联网
 - **翻得地道**：调用大模型生成三种风格的翻译（口语 / 正式 / 地道）
-- **记得住**：基于 SM-2 算法的科学复习机制，把查过的词和翻译过的句子彻底掌握
+- **记得住**：基于 FSRS 算法的科学复习机制，把查过的词和翻译过的句子彻底掌握
 - **数据安全**：账号体系由 Firebase Auth 管理；学习数据通过 Firestore 跨设备同步，规则确保仅本人可访问
 
 ### 1.4 设计原则
@@ -48,11 +48,12 @@ Glossy 是一款专注于"查得到、记得住"的英语学习工具。区别�
 | 发音 | 显示英美音标，提供发音按钮 |
 | 翻译 | 输入中文，返回三种风格英文翻译 |
 | 翻译内查词 | 翻译结果中可点击单词或短语弹出快速查询 |
-| 复习本 | 用户主动加入的待复习条目集合 |
-| 复习会话 | 卡片式复习，支持单词卡和句子卡 |
-| 评分调度 | 四档评分（Again/Hard/Good/Easy），SM-2 算法调度 |
+| 复习本 | 用户主动加入的待复习条目集合；复习页只显示今天的队列与统计 |
+| 复习会话 | 卡片式复习：单词卡打字作答、系统判定，句子卡心里翻译后自评；新卡先介绍再考，可撤销 |
+| 评分调度 | 四档评分（Again/Hard/Good/Easy），FSRS 算法调度，每天新卡 / 复习有上限；单词卡按判定给出建议评分 |
+| 复习设置 | 每天新卡数与复习数上限、目标保留率、最长间隔、学习 / 重学步骤、新卡顺序、自动发音；跟账号走，各设备一致 |
 | 语境采集 | 粘贴遇到的英文段落，点单词或整条短语，查它在这句话里的意思，连同原句一起存成卡片 |
-| 历史记录 | 所有查询自动留痕，可追溯、可补加复习 |
+| 词库 | 查过的词、翻译过的句子、读过的段落都在这里，可搜索、按学习状态筛选、排序，可补加复习或删除（取代原来的历史记录） |
 | 账号与同步 | 邮箱注册登录，学习数据经 Firestore 实时跨设备同步 |
 | 本地缓存 | 查过的词和翻译永久缓存，离线可查 |
 
@@ -62,7 +63,7 @@ Glossy 是一款专注于"查得到、记得住"的英语学习工具。区别�
 - 数据导出 / 导入
 - 词典 API 集成（一律用 LLM 生成）
 - 中译英查词、英译中翻译
-- 学习统计仪表盘
+- 完整的学习统计仪表盘（历史曲线、按天的记忆率等；复习页只有今天的几个数）
 - 多语种支持（仅中英）
 
 ---
@@ -99,34 +100,39 @@ Glossy 是一款专注于"查得到、记得住"的英语学习工具。区别�
 6. 浮层内可逐条加入义项、一键加入全部义项，或"打开完整查询"
 7. 翻译三个版本可全部加入复习本（一张卡片同时呈现三个版本）
 
-### 3.4 主线三：复习本管理
+### 3.4 主线三：复习页
 
-1. 底部导航第二个 tab 进入复习本
-2. 顶部琥珀色卡片显示"今日待复习 N 个"
-3. 下方分单词 / 句子两个子 tab，列出所有已加入条目
-4. 每条显示词或句子原文、下次复习时间、掌握程度（5 个圆点）
-5. 用户主动点击"开始复习"进入复习会话
+1. 底部导航第二个 tab 进入复习页
+2. 顶部是今天这一轮：Due / New / Learning 三个数 + "Start review"；有义项因"每个词每天一个义项"留到明天、老卡超出每天的复习上限、或新卡超出每天的新卡上限时，下方各有一行说明
+3. 四格统计：今天复习了几次（其中几张是新卡）、首答记住率、明天到期、卡片总数；右上角是连续复习天数
+4. 复习页不列卡片：浏览、搜索、筛选、删除都在词库（3.6）
+5. 用户主动点击 "Start review" 进入复习会话
 
 ### 3.5 主线四：复习会话
 
-1. 系统按 due_at 顺序加载今日待复习卡片
-2. 卡片回忆面：
-   - 单词卡 → 显示英文词
-   - 句子卡 → 显示中文原句
-3. 用户在心里回忆答案，点击"显示答案"
-4. 卡片揭晓面：
-   - 单词卡 → 显示音标、所有释义、例句
-   - 句子卡 → 显示三个英文风格版本
-5. 用户从四档评分中选择一个
-6. 系统应用 SM-2 算法更新该卡的状态，写入 IndexedDB
-7. 自动进入下一张卡，全部完成后显示完成屏
+1. 开场一次排好今天的队列：在学的卡（新卡的学习步骤、忘了在重学的）最先，到期的老卡（最快要忘的先）与新卡穿插；老卡和新卡每天各有上限（默认 200 / 20，在设置里改）；同一个词一天只出一个义项，其余留到明天
+2. 新单词卡先出介绍卡：词头、音标、释义和之后要考的那句例句。"Got it, test me" 后隔 3 张再考；"I know this" 直接按 Easy 记
+3. 单词卡：显示英文释义和挖空的句子（找不到能挖空的句子时只显示释义），用户**输入**这个词——句子要什么词形就输入什么词形。可以要提示（先中文，再首字母和长度），也可以点 "Don't know"
+4. 系统判定：正确 / 拼写差一点 / 词形不对 / 答错 / 不知道，显示逐字母对比，并按结果给出建议评分
+5. 句子卡：显示中文原句，用户在心里翻译，点 "Show answer" 看三个英文版本
+6. 用户从四档评分中选一个（单词卡上建议的那档按 Enter 即可确认，也可以改选）
+7. 系统用 FSRS 更新该卡（写入的正是按钮上显示的间隔）并写一条复习日志，每张都立即落库；还在学习步骤里的卡（新卡、评 Again 的卡）几分钟后再问一次
+8. 可以撤销上一张：卡片恢复原样、那条日志删除，可以一路撤回本轮第一张
+9. 全部完成后显示完成屏：复习次数、记住率、新学数、用时，以及这一轮没记住的词
 
-### 3.6 主线五：历史记录
+### 3.6 主线五：词库
 
-1. 底部导航第三个 tab 进入历史
-2. 按日期分组列出所有查询记录
-3. 单词和翻译用 W/T 图标区分
-4. 已加入复习本的标记 "added"，未加入的可补加
+1. 底部导航第三个 tab 进入词库（Library；原来的历史记录，旧地址 `/history` 跳转过来）
+2. 分 Words / Sentences / Passages 三栏：词按词头归成一行（查了几次、加了几个义项都只算一条），句子按原文，段落是 Read 里粘贴过的
+3. 每栏都能搜索（词栏也搜释义）、按学习状态筛选（未加入 / 新 / 学习中 / 复习中 / 已掌握，段落没有）、排序（最近 / 字母 / 下次复习，段落没有"下次复习"）
+4. 已加入的条目每张卡一格进度条，并显示下次复习时间；未加入的可点 "+ add" 补加
+5. 左滑删除：删掉这个词或句子的查询记录和全部复习卡；共享缓存不动
+
+### 3.7 主线六：复习设置
+
+1. 设置页的 Review 一节：每天新卡数、每天复习数、目标保留率、最长间隔、学习步骤、重学步骤、新卡顺序、自动发音
+2. 改了即存，跟账号走：换一台设备，排出来的队列和间隔都一样
+3. 下一轮复习开始时生效；和默认值不同时可以一键恢复默认
 
 ---
 
@@ -146,7 +152,7 @@ Glossy 是一款专注于"查得到、记得住"的英语学习工具。区别�
 
 - 底部导航当前 tab
 - "加入复习本"主按钮
-- "今日待复习"数字卡片
+- 复习页的 "Start review" 按钮和连续天数徽章
 - 复习卡前的进度指示
 - 词性标签 pill
 
@@ -164,11 +170,11 @@ Glossy 是一款专注于"查得到、记得住"的英语学习工具。区别�
 | 2 | 查词结果 | 音标、释义、例句、加入复习本 |
 | 3 | 翻译结果 | 三个风格卡片，可点击词标记 |
 | 4 | 翻译内查词浮层 | 底部抽屉，单词释义 + 加入按钮 |
-| 5 | 复习本 | 待复习卡片 + 列表 + 子 tab |
-| 6 | 复习卡（回忆面） | 极简，单词或中文句子 |
-| 7 | 复习卡（揭晓面） | 完整释义 + 四档评分按钮 |
-| 8 | 历史记录 | 按日期分组的查询记录 |
-| 9 | 设置页 | 账号信息 + 退出登录 |
+| 5 | 复习页 | 今天的队列与统计 |
+| 6 | 复习会话（提问） | 新卡介绍；单词卡打字作答；句子卡心里翻译 |
+| 7 | 复习会话（揭晓与评分） | 判定 + 逐字母对比 + 建议评分 + 撤销；完成屏 |
+| 8 | 词库 | 词 / 句子 / 段落三栏，搜索 + 状态筛选 + 排序 |
+| 9 | 设置页 | 账号信息 + 退出登录 + 复习设置 + 中文显示 |
 | 10 | 登录 | 邮箱密码登录，未登录时的落地页 |
 | 11 | 注册 | 邮箱密码注册 |
 | 12 | 语境采集 | 粘贴进来的段落，单词和短语都可点，点开后是"它在这句话里的意思" |
@@ -267,12 +273,21 @@ spans 结构：
 | id | string | UUID |
 | type | string | "word" 或 "sentence" |
 | snapshot | json | 加入时的完整内容快照 |
-| ease_factor | number | SM-2 易度因子，初始 2.5 |
-| interval_days | number | 当前间隔天数，初始 0 |
-| repetitions | number | 连续答对次数，初始 0 |
+| state | number | FSRS 状态：0 新卡 · 1 学习中 · 2 复习 · 3 重学，初始 0 |
+| stability | number | 记忆稳定度（天）：可提取度降到 90% 要多少天，初始 0 |
+| difficulty | number | 难度 1–10，第一次评分时确定，初始 0 |
+| elapsed_days | number | ts-fsrs `Card` 的字段（已标记弃用），原样保存 |
+| scheduled_days | number | 这次排定的间隔天数 |
+| learning_steps | number | 学习步骤走到了第几步 |
+| reps | number | 评分总次数 |
+| lapses | number | 复习时忘掉（评 Again）的次数 |
 | due_at | timestamp | 下次复习时间，建索引 |
 | added_at | timestamp | 加入时间 |
-| last_reviewed_at | timestamp | 上次复习时间 |
+| last_reviewed_at | timestamp | 上次复习时间，新卡为 null |
+
+从 `state` 到 `lapses` 加上两个日期，就是 ts-fsrs 的 `Card`（日期存成毫秒时间戳）。建卡用
+`newSchedule()`、读卡用 `withSchedule()` / `scheduleOf()`（`src/algorithms/fsrs.ts`），不要手写默认值。
+SM-2 时代的卡片带的是 `ease_factor` / `interval_days` / `repetitions`，换 FSRS 时一次性重置成新卡（见 6.1.5）。
 
 snapshot 结构（单词）：一张卡只教**一个义项**，所以 "run" 可以在复习本里出现好几次，
 每次对应用户真正遇到过的那个意思。
@@ -337,25 +352,43 @@ snapshot 结构（句子）：
 | id | string | UUID |
 | item_id | string | 对应 review_items.id |
 | rating | string | "again" / "hard" / "good" / "easy" |
-| prev_interval | number | 评分前的间隔 |
-| new_interval | number | 评分后的间隔 |
+| state | number | 评分**前**卡片的 FSRS 状态；0 表示这是这张卡第一次评分 |
 | reviewed_at | timestamp | 评分时间 |
+
+SM-2 时代的日志（带 `prev_interval` / `new_interval`、没有 `state`）在换 FSRS 时全部删除。
 
 #### settings（设置）
 
-key-value 存储。本地专属，不参与 Firestore 同步：
+key-value 存储。除最后一行外都是本地专属，不参与 Firestore 同步：
 
 | key | value | 用途 |
 |-----|-------|------|
 | `bootstrapped:{uid}` | 写入时间戳字符串 | 标记本设备已为该用户跑过一次 `pushLocalOnlyItems`。缺了它，登录前就存在的本地数据会被反复上传，把其他设备已删除的条目重新拉回来 |
+| `fsrs_reset:{uid}` | 写入时间戳字符串 | 标记本设备已为该用户跑过一次 `resetSchedulesForFsrs`（SM-2 换 FSRS 的一次性重置，见 6.1.5） |
 | `chinese_display` | `always` / `tap` / `never` | 中文何时出现，默认 `tap`（点了才显示）。设置页可改，见屏幕 9。因为不同步，它是"本机显示偏好"而非学习数据 |
+| `review_settings:{uid}` | JSON 字符串（`ReviewSettings`） | 复习设置（见下）。它是学习设置，跟账号走：真本在 Firestore `users/{uid}/prefs/review`，这一行是 `subscribeReviewSettings` 写下的本地镜像；设置页改的时候先写这里、再整份写到 Firestore |
+
+#### ReviewSettings（复习设置）
+
+Firestore 路径 `users/{uid}/prefs/review`，一个文档。读出来的值都过 `normalizeReviewSettings()`：数字夹到范围内，步骤重新校验，坏值退回默认——文档由各设备上不同版本的应用写入，一个坏值不能卡住队列和调度器。
+
+| 字段 | 类型 | 默认 | 范围 / 说明 |
+|------|------|------|-------------|
+| newPerDay | number | 20 | 0–500，每天新卡上限（见 6.2） |
+| reviewsPerDay | number | 200 | 0–5000，每天到期老卡上限（见 6.2） |
+| retention | number | 0.9 | 0.80–0.97，即 FSRS 的 request_retention |
+| maxIntervalDays | number | 36500 | 1–36500 |
+| learningSteps | string[] | `["1m", "10m"]` | 每步是正整数 + `m` / `h` / `d`；可为空（新卡直接按天排） |
+| relearningSteps | string[] | `["10m"]` | 同上，给忘了的卡 |
+| newOrder | `newest` / `oldest` | `newest` | 新卡顺序 |
+| autoSpeak | boolean | false | 介绍卡出现、揭晓答案时读出单词 |
 
 ### 5.3 索引
 
-- history.queried_at：历史 tab 时间倒序
+- history.queried_at：按时间倒序取查询记录
 - history.type：可选，类型过滤
 - review_items.due_at：复习本今日待复习查询的关键索引
-- review_items.type：单词 / 句子子 tab 切换
+- review_items.type：按单词 / 句子取卡
 - review_logs.item_id：查询某张卡的复习历史
 
 ### 5.4 Dexie schema 定义
@@ -394,7 +427,7 @@ db.version(2).stores({
 | text | string | 粘贴进来的整段英文 |
 | source | string\|null | 出处，用户自己填（"Podcast · hiring episode"） |
 | chunks | json | `findChunks()` 找出的可整体点击短语，随段落缓存，重开不再花钱 |
-| created_at | timestamp | 建索引，Read 标签和历史按它倒序 |
+| created_at | timestamp | 建索引，Read 标签和词库的 Passages 栏按它倒序 |
 
 卡片里的语境（`WordSnapshot.contexts`）带 `capture_id` 指回这里，但**不依赖**它：
 段落删掉后，卡片仍留着自己那份句子副本。
@@ -404,113 +437,106 @@ db.version(2).stores({
 - word_cache 和 translation_cache 是缓存表，永不失效，重复查询直接命中
 - history 通过 ref_key 引用缓存表，避免冗余
 - review_items 的 snapshot 字段冗余存储完整内容，与缓存解耦，确保用户加入时看到的内容稳定不变
-- review_logs 不是 MVP 强需求，但建议保留以支持未来的统计和调试
+- review_logs 撑起复习页的全部统计（今日复习数、新学数、记住率、连续天数）和每天的新卡上限；也为将来用自己的复习记录优化 FSRS 参数留着
 
 ---
 
 ## 6. 核心算法
 
-### 6.1 SM-2 间隔重复算法
+### 6.1 FSRS 间隔重复调度
 
-#### 6.1.1 状态变量
+实现见 `src/algorithms/fsrs.ts`，算法来自 `ts-fsrs`（与 wordloom 同一版本、同一套参数）。
 
-每张复习卡维护三个状态：
+#### 6.1.1 记忆状态
 
-- `repetitions`：连续答对次数，初始 0，答错归零
-- `interval_days`：当前间隔天数，初始 0
-- `ease_factor`：易度因子，初始 2.5，最低 1.30
+FSRS 给每张卡一条自己的遗忘曲线：
 
-#### 6.1.2 评分映射规则
+- **stability（稳定度）**：可提取度从 100% 降到 90% 要多少天。答对时增长，忘了骤降
+- **difficulty（难度）**：1–10，决定稳定度涨得多快
+- **retrievability（可提取度）**：此刻想得起来的概率，由稳定度和距上次复习的天数算出，不存储
+- **state**：New → Learning → Review；复习时忘了进入 Relearning，重学完回到 Review
 
-经典 SM-2 用 0-5 六档评分，本产品采用 Anki 风格四档：
+#### 6.1.2 参数
 
-##### Again（完全没记住）
+前四项是默认值，用户可在设置页的 Review 里改（`ReviewSettings`，见 5.2）；`previewRatings(item, now, settings)` 每次按传入的设置取调度器，设置不变就复用同一个。
 
-- repetitions = 0
-- interval_days = 0
-- ease_factor = max(1.30, ease_factor - 0.20)
-- due_at = 今天（当天再次出现）
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| request_retention | 0.9 | 可提取度降到这个值时到期；可设 0.80–0.97 |
+| learning_steps | 1m, 10m | 新卡的学习步骤，当天走完；可改、可为空 |
+| relearning_steps | 10m | 忘了的卡重学的步骤；可改、可为空（为空时评 Again 直接按天排） |
+| maximum_interval | 36500 天 | 可设 1–36500 |
+| enable_short_term | true | 学习步骤按分钟计 |
+| enable_fuzz | true | 间隔带一点随机，同一天学的卡不会扎堆在同一天到期 |
+| 权重 w | ts-fsrs 默认值 | 还没有用自己的复习记录优化。可提取度由卡的稳定度、间隔天数和 w 算出，上面这些设置都不参与 |
 
-##### Hard（记起来很费劲）
+#### 6.1.3 评分的效果
 
-- repetitions += 1
-- interval_days = max(1, round(上次 interval × 1.2))
-- ease_factor = max(1.30, ease_factor - 0.15)
+四档评分（Anki 风格），分钟数是默认步骤下的：
 
-##### Good（顺利想起来）
-
-- repetitions += 1
-- 第 1 次：interval_days = 1
-- 第 2 次：interval_days = 6
-- 第 3 次及以后：interval_days = round(上次 interval × ease_factor)
-- ease_factor 不变
-
-##### Easy（毫不费力）
-
-- repetitions += 1
-- 先按 Good 计算 interval_days
-- 再乘以 1.3 并取整
-- ease_factor += 0.15
-
-#### 6.1.3 算法实现
-
-```javascript
-function applyRating(item, rating) {
-  let { repetitions, interval_days: i, ease_factor: ef } = item;
-
-  if (rating === 'again') {
-    repetitions = 0;
-    i = 0;
-    ef = Math.max(1.30, ef - 0.20);
-  } else if (rating === 'hard') {
-    repetitions += 1;
-    i = Math.max(1, Math.round(i * 1.2));
-    ef = Math.max(1.30, ef - 0.15);
-  } else if (rating === 'good') {
-    repetitions += 1;
-    if (repetitions === 1) i = 1;
-    else if (repetitions === 2) i = 6;
-    else i = Math.round(i * ef);
-  } else if (rating === 'easy') {
-    repetitions += 1;
-    if (repetitions === 1) i = 1;
-    else if (repetitions === 2) i = 6;
-    else i = Math.round(i * ef);
-    i = Math.round(i * 1.3);
-    ef = ef + 0.15;
-  }
-
-  return {
-    repetitions,
-    interval_days: i,
-    ease_factor: ef,
-    due_at: addDays(new Date(), i),
-    last_reviewed_at: new Date()
-  };
-}
-```
+- **新卡**：Again 1 分钟、Hard 6 分钟、Good 10 分钟后再问（进入学习步骤）；Easy 直接毕业，约一周后复习。Again 是第一步，Hard 是前两步的平均，Good 是下一步——步骤改了，这几个数跟着变
+- **学习步骤中**：Good 进入下一步，最后一步 Good 毕业（约 2 天后复习）；Again 回到第一步
+- **复习**：Hard / Good / Easy 按稳定度给出由短到长的间隔（天）；Again 进入重学，10 分钟后再问，`lapses` + 1。重学步骤设为空时，Again 直接按天排
 
 #### 6.1.4 UI 上的间隔预览
 
-复习卡揭晓面的四个评分按钮上显示该评分对应的下次间隔（如 `<1m / 2d / 4d / 7d`）。这些数值实时计算，让用户的评分有可见后果。
+揭晓答案时，`StudySession.reveal()` 用 `previewRatings()` 一次算出四档结果并缓存，四个按钮显示各自到期时间离现在多久（`formatInterval()`：`<1m`、`10m`、`5h`、`3d`、`1.5mo`、`2.1y`）。评分时 `rate()` 原样写入缓存的那一档——fuzz 是随机的，评分时重算会得到另一个间隔，按钮上的数字就不作数了。"I know this" 不经过揭晓，评分时才算。
+
+#### 6.1.5 从 SM-2 换到 FSRS
+
+换 FSRS 时按用户要求清空复习记录、全部从头开始。`resetSchedulesForFsrs()`（`src/db/firestore-sync.ts`）在登录后、`pushLocalOnlyItems()` 之后跑一次：
+
+- 读服务端（先 `waitForPendingWrites`，再 `getDocsFromServer`），只动仍是 SM-2 形状的数据：卡片看 `needsReset()`（没有 `state`、带着 `ease_factor`、或 `due_at` 不是有限数），日志看有没有 `state`
+- 卡片重置为新卡：`newSchedule(added_at)`，删掉 `ease_factor` / `interval_days` / `repetitions`；快照（词、义项、句子、翻译）不动
+- SM-2 复习日志全部删除；连续天数和今天的统计随之归零
+- 成功后在 `settings` 写 `fsrs_reset:{uid}`；失败（离线、规则没部署）下次登录重试
+
+只动 SM-2 形状的数据，所以每台设备各跑一次是安全的；也必须每台都跑：旧版本离线时或在没刷新的旧标签页里写下的 SM-2 评分，只有那台设备自己等得到。重置落地之前，`withSchedule()` 把 SM-2 卡当新卡读；每次写 schedule 都顺手删掉 SM-2 字段，免得一张卡同时带两套字段、又被当成待重置。
 
 ### 6.2 复习卡形态
 
-实现见 `src/algorithms/cards.ts`。单词卡有句子就一律挖空：把词从句子里拿掉，英文释义作 Hint，学习者要想出这个词——连同它在这句话里该用的形式（ran / running / pulled it off）：
+实现见 `src/algorithms/cards.ts`。单词卡一律给出英文释义，让学习者**输入**这个词；有句子就挖空，要输入的是这个词在句中该用的形式（ran / running / pulled it off）：
 
 | 形态 | 条件 | 问什么 |
 |------|------|--------|
 | `cloze` | 默认，从第一次复习起 | 保存时那句话，目标词挖空，释义作提示 —— 从意思想出词和词形 |
-| `fresh` | `repetitions >= 3` 且可用的句子多于一条 | 同样挖空，换一句这张卡没用过的句子 —— 考的是词，不是那句话 |
-| `bare` | 没有一句能定位到目标词 | 退回光词头，回忆意思（多为 schema 2 之前的老词条） |
+| `fresh` | 成熟卡（Review 状态、stability ≥ 21 天）且可用的句子多于一条 | 同样挖空，换一句这张卡没用过的句子 —— 考的是词，不是那句话 |
+| `bare` | 没有一句能定位到目标词（多为 schema 2 之前的老词条） | 只有释义，输入词头 |
 
-不问 "What does it mean here?"：认出意思只要有个模糊印象就像是会了，自己评分时容易高估；挖空只有一个正确答案，想没想出来一目了然。
+不问 "What does it mean here?"：认出意思只要有个模糊印象就像是会了，自己评分时容易高估；挖空只有一个正确答案，打出来对不对由系统判定。
 
-只要手上有句子就不会光考词：脱离语境回忆单词，正是本产品想替换掉的背单词表习惯。
+三种形态方向一致，都是从意思到词：`bare` 也不再亮出光秃秃的词头让人回忆意思——脱离语境地认单词，正是本产品想替换掉的背单词表习惯。
 
 挖空前要先在句中找到这个词，所以只有能定位的句子才算"可用"。`markTarget()` 只匹配整词——"ran" 不会落在 "Fran" 里；老例句里的 "running" 会整个挖掉，而不是挖掉 "run"、把 "ning" 露在外面。
 
-`fresh` 在可用句子之间轮换（`1 + ((reps - 3) % (usable.length - 1))`）：用户自己采集的句子排在最前，成熟后轮到词典例句。按需给义项生成额外例句还没做。
+`fresh` 在可用句子之间轮换（`1 + (reps % (usable.length - 1))`）：用户自己采集的句子排在最前，成熟后轮到词典例句；忘了进入重学时回到原句。按需给义项生成额外例句还没做。
+
+#### 作答判定
+
+`judgeAnswer()`（`src/algorithms/answer.ts`）把输入和答案归一后比较（不分大小写；弯引号、各种横线、句末标点、多余空格抹平；连字符和空格可互换）：
+
+| 结果 | 条件 | 建议评分 |
+|------|------|----------|
+| correct | 相同 | Good；用过提示则 Hard |
+| wrong_form | 逐词还原成原形后相同，或打的是词头而句子要别的形式（strike → struck） | Hard |
+| typo | 答案 ≥ 4 个字母且编辑距离 ≤ 1（≥ 8 个字母时 ≤ 2；相邻两字母对调算 1） | Hard |
+| wrong | 其余 | Again |
+| gave_up | 点了 "Don't know" | Again |
+
+建议评分（`suggestRating()`）只是 RatingBar 上默认的那档，用户可以改——明知是手滑打错，照样可以给 Good。判定结果只用于当场显示，不落库。
+
+句子卡不判定：三个版本都算对，心里译成哪种都行，仍由用户自评（见附录 A "句子复习不强制输入英文"）。
+
+#### 每日队列
+
+`buildDailyQueue()`（`src/algorithms/queue.ts`）在会话开场时按当时的复习设置一次排定，这一轮里改设置不影响它：
+
+- 在学的卡（FSRS 的 Learning / Relearning：新卡的学习步骤、忘了在重学的）最先，按到期时间，全部出
+- 到期的老卡按可提取度升序（最快要忘的先出）；新卡默认按 `added_at` 降序（刚查的先学；设置里选 oldest 时按这个词最早加入的时间升序），均匀穿插在老卡之间
+- **每天的老卡上限 `reviewsPerDay`**（默认 200）：今天已经评过的复习也算（review_logs 里 `state` 为 Review 的），留下最快要忘的，其余留到明天（`reviewsWaiting`），算进明日到期
+- **每天的新卡上限 `newPerDay`**（默认 20）：今天已经第一次评过的也算（review_logs 里 `state` 为 0 的），超出的留到以后（`newWaiting`）。换 FSRS 时整本重置成了新卡，不设上限就会同一天全部到期
+- **每个词每天只出一张卡**：同一个词的几个义项，答案都是这个词，第一个一考，后面的就白送了。其余义项留到明天（`held`），卡片数据不变；今天已经复习过的词也算占过名额。在学的卡不受此限
+- 会话中：新单词卡先出介绍卡，隔 3 张再考。评完仍在学习步骤里、且今天之内到期的卡放回队列，到点再出，到点的排在最前；别的卡都出完了，就提前出 20 分钟内到期的，不让会话停在等待上
 
 ### 6.3 词形还原（Lemmatization）
 
@@ -549,10 +575,10 @@ function applyRating(item, rating) {
 
 ### 7.2 用户配置项
 
-无。设置页只有账号信息和退出登录（见屏幕 9）。
+设置页（屏幕 9）有两组用户配置：复习设置（`ReviewSettings`，见 5.2，跟账号同步）和中文显示（`chinese_display`，本机偏好）。
 
 Base URL、API key、模型名均不可配置：密钥在 Worker secret 里，模型由 `getModel()`
-硬编码为 `deepseek-chat`。`settings` store 目前只存同步标记 `bootstrapped:{uid}`。
+硬编码为 `deepseek-chat`。
 
 ### 7.3 查词 Prompt
 
@@ -730,9 +756,9 @@ API 调用可能的失败场景及对应人话提示：
 /src
   /auth            Firebase Auth 上下文（AuthContext.tsx）
   /components      可复用 UI 组件
-  /pages           页面级组件（Home、Lookup、Translate、Review、History、Settings、Login、Register）
-  /db              Dexie schema（index.ts）、查询层（queries.ts）、Firestore 同步层（firestore-sync.ts）
-  /algorithms      SM-2 等核心算法
+  /pages           页面级组件（Home、Lookup、Translate、Review、Library、Settings、Login、Register）
+  /db              Dexie schema（index.ts）、查询层（queries.ts）、Firestore 同步层（firestore-sync.ts）、词库（library.ts）、设置（settings.ts）
+  /algorithms      FSRS 调度、复习队列与会话等核心算法
   /api             调用 Worker 代理（llm.ts）与错误处理
   /prompts         查词与翻译的 prompt 文本（独立文件，便于迭代）
   /utils           lemmatize、hash 等工具函数
@@ -824,8 +850,6 @@ async function fetchViaProxy(prompt, model, signal, onStream) {
 
 - 复习统计：连续打卡天数、本月复习量、掌握度分布
 - 复习提醒：基于浏览器 Notification API 的轻量提醒（用户手动开启）
-- 输入历史搜索：在历史 tab 内搜索已查询过的词或句子
-- 复习本搜索
 
 ### 10.3 长期（6 个月以上）
 
@@ -859,7 +883,7 @@ async function fetchViaProxy(prompt, model, signal, onStream) {
 | word_cache / translation_cache 全体用户共享 | 同一个词全网只调一次 LLM，摊薄自建代理的调用成本 |
 | PWA 而非原生 App | 一份代码跨平台，开发成本低，适合个人项目验证 |
 | Firebase Auth + Firestore 同步 | 支持多设备无缝继续学习；IndexedDB 保留本地优先读写 |
-| SM-2 而非 FSRS | SM-2 实现简单且经过验证，FSRS 复杂度过高 |
+| FSRS 而非 SM-2 | 按每张卡自己的遗忘曲线排期，同样的记住率下复习次数更少；`ts-fsrs` 现成可用，与 wordloom 同一套参数 |
 | 四档评分而非六档 | Anki 已验证四档对用户更友好 |
 | 翻译三个版本合并为一张复习卡 | 三个版本互相补充，分开复习割裂学习体验 |
 | 句子复习不强制输入英文 | 降低复习门槛，避免用户因负担而放弃 |
@@ -867,6 +891,13 @@ async function fetchViaProxy(prompt, model, signal, onStream) {
 | 所有查词记录进 history，仅主动加入的进复习本 | 区分被动留痕与主动学习意图 |
 | 一张复习卡 = 一个义项 | 因为 "run a business" 查了 run，复习时却考 5 个不相干的义项——问题没有正确答案。加号落在每条释义上，卡片自然对应用户真正想记的那个意思 |
 | 复习单词卡一律挖空，不问 "What does it mean here?" | 认出意思容易让人高估自己；挖空要求产出确切的词和词形，对错一眼可见，也更接近真正要用这个词的时候 |
+| 单词卡打字作答，系统判定后给建议评分（仿 wordloom 的复习） | 打出来的词对不对，不靠自我感觉；判定区分"拼写差一点"和"词形不对"，比一句"错了"更有用。建议评分省掉犹豫，最终仍由用户决定 |
+| 每个词每天只出一个义项 | 一个义项填过空，答案就是这个词，同一天再问它的别的义项等于白送；留到明天才是真回忆 |
+| 换 FSRS 时清空复习记录、全部从头开始 | 用户的要求；SM-2 的易度和间隔换算不成 FSRS 的记忆状态。只重置调度、删掉日志，卡片内容一条不动；新加的字段不建索引，Dexie 不升版本 |
+| 新卡每天默认最多 20 张，老卡 200 张，都可在设置里改 | 重置后整本都是新卡，不设上限就会同一天全部到期；20 是 wordloom 的默认值。老卡原本不设上限，200 在正常使用下碰不到，只在积压很多天之后把一天的量压住——留下的是最快要忘的 |
+| 复习设置跟账号走，中文显示仍是本机偏好 | 上限、保留率、步骤决定的是排期本身，两台设备各用一套，同一张卡就会被排出两个间隔；中文显示只影响这台设备上怎么看 |
+| 历史记录改成词库（仿 wordloom） | 按日期滚动的流水账找不到东西：词库按词归并，能搜、能按学习状态筛、能按下次复习排，复习页因此只留今天这一轮 |
+| 词库左滑删除连卡带记录一起删 | 词库的一行代表"这个词"，只删查询记录、卡还在的话，这一行删完会原样再出现；复习日志保留，共享缓存绝不动 |
 | "全部加入"仍是一个义项一张卡 | 只是省掉逐个点 `+`，不退回整词卡——复习时每张卡依然只有一个正确答案。按钮文案写明会加几条，因为折叠起来的、浮层没展示的义项也会一并加入 |
 | 老卡片保留 `definitions` 而不迁移 | 替用户挑一个义项等于悄悄丢掉其余的；两种形状同时渲染成本很低 |
 | 查词页的重新生成会覆盖共享缓存 | 词条一旦写坏或太单薄，对所有人都一样；这正是共享缓存的代价与好处 |

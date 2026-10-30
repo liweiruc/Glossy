@@ -1,12 +1,15 @@
 import {
-  doc, getDoc, setDoc, deleteDoc, collection, getDocs, writeBatch,
-  onSnapshot,
+  doc, getDoc, setDoc, deleteDoc, collection, getDocs, getDocsFromServer, writeBatch,
+  onSnapshot, deleteField, waitForPendingWrites,
   type WriteBatch, type Unsubscribe,
 } from 'firebase/firestore'
 import type { Table } from 'dexie'
 import { firestore } from '../firebase'
 import { db } from './index'
 import type { WordCache, TranslationCache, HistoryItem, ReviewItem, ReviewLog, Capture } from './index'
+import type { ReviewSettings } from './settings'
+import { needsReset, newSchedule } from '../algorithms/fsrs'
+import type { Schedule } from '../algorithms/fsrs'
 
 // ── Shared caches ────────────────────────────────────────────────────────────
 
@@ -53,6 +56,22 @@ export async function updateReviewItemInFirestore(
   await setDoc(doc(userCol(uid, 'review_items'), id), data, { merge: true })
 }
 
+// The fields cards had under SM-2. Every write of an FSRS schedule deletes them.
+const DROP_SM2 = {
+  ease_factor: deleteField(),
+  interval_days: deleteField(),
+  repetitions: deleteField(),
+}
+
+export async function updateReviewScheduleInFirestore(
+  uid: string,
+  id: string,
+  schedule: Schedule,
+): Promise<void> {
+  console.log('[sync] update review_item', id)
+  await setDoc(doc(userCol(uid, 'review_items'), id), { ...schedule, ...DROP_SM2 }, { merge: true })
+}
+
 export async function pushCapture(uid: string, capture: Capture): Promise<void> {
   console.log('[sync] push capture', capture.id)
   await setDoc(doc(userCol(uid, 'captures'), capture.id), capture)
@@ -77,9 +96,41 @@ export async function pushReviewLog(uid: string, log: ReviewLog): Promise<void> 
   await setDoc(doc(userCol(uid, 'review_logs'), log.id), log)
 }
 
+export async function deleteReviewLogFromFirestore(uid: string, id: string): Promise<void> {
+  console.log('[sync] delete review_log', id)
+  await deleteDoc(doc(userCol(uid, 'review_logs'), id))
+}
+
 export async function deleteReviewItemFromFirestore(uid: string, id: string): Promise<void> {
   console.log('[sync] delete review_item', id)
   await deleteDoc(doc(userCol(uid, 'review_items'), id))
+}
+
+// The learner's review settings are one document, mirrored into `settings` under this key
+// so they are read like the rest of the data. The key carries the user: another account
+// signed in on this device must not inherit them.
+export const reviewSettingsKey = (uid: string) => `review_settings:${uid}`
+
+function reviewSettingsDoc(uid: string) {
+  return doc(firestore, 'users', uid, 'prefs', 'review')
+}
+
+export async function pushReviewSettings(uid: string, settings: ReviewSettings): Promise<void> {
+  console.log('[sync] push review settings')
+  await setDoc(reviewSettingsDoc(uid), settings)
+}
+
+// Until the learner changes something there is no document, and the defaults apply.
+function subscribeReviewSettings(uid: string): Unsubscribe {
+  const onError = (e: unknown) => console.error('[sync prefs]', e)
+  return onSnapshot(
+    reviewSettingsDoc(uid),
+    snap => {
+      if (!snap.exists()) return
+      db.settings.put({ key: reviewSettingsKey(uid), value: JSON.stringify(snap.data()) }).catch(onError)
+    },
+    onError,
+  )
 }
 
 // Deletes the history record only. Never touches word_cache/translation_cache —
@@ -161,24 +212,67 @@ export async function pushLocalOnlyItems(uid: string): Promise<void> {
     captures: newCaptures.length,
   })
 
-  type Op = (b: WriteBatch) => void
-  const ops: Op[] = [
+  await commitInBatches([
     ...newHistory.map(h => (b: WriteBatch) => { b.set(doc(userCol(uid, 'history'), h.id), h) }),
     ...newItems.map(i => (b: WriteBatch) => { b.set(doc(userCol(uid, 'review_items'), i.id), i) }),
     ...newLogs.map(l => (b: WriteBatch) => { b.set(doc(userCol(uid, 'review_logs'), l.id), l) }),
     ...newCaptures.map(c => (b: WriteBatch) => { b.set(doc(userCol(uid, 'captures'), c.id), c) }),
-  ]
+  ])
 
+  // Only after every batch has been acknowledged — a throw above leaves the device
+  // un-bootstrapped so the upload is retried on the next login.
+  await db.settings.put({ key: bootstrapKey(uid), value: String(Date.now()) })
+}
+
+type Op = (b: WriteBatch) => void
+
+async function commitInBatches(ops: Op[]): Promise<void> {
   const CHUNK = 400
   for (let i = 0; i < ops.length; i += CHUNK) {
     const b = writeBatch(firestore)
     ops.slice(i, i + CHUNK).forEach(op => op(b))
     await b.commit()
   }
+}
 
-  // Only after every batch has been acknowledged — a throw above leaves the device
-  // un-bootstrapped so the upload is retried on the next login.
-  await db.settings.put({ key: bootstrapKey(uid), value: String(Date.now()) })
+const fsrsResetKey = (uid: string) => `fsrs_reset:${uid}`
+
+// The switch from SM-2 to FSRS started every card over: each becomes new again, and every
+// SM-2 review log is deleted. Cards keep their words, senses and sentences.
+//
+// Works on the server's copy, so it reaches what this device has never synced; the
+// snapshot listener carries the result into IndexedDB. Only what still has the SM-2 shape
+// is touched, so running on every device is harmless — and needed: a device that was
+// offline, or still had an SM-2 build open, can write SM-2 ratings after another device
+// has reset, and only that device can wait for its own queued writes.
+//
+// Runs after pushLocalOnlyItems, so whatever that uploads is reset too. A throw leaves the
+// flag unset, and the reset is tried again on the next login.
+export async function resetSchedulesForFsrs(uid: string): Promise<void> {
+  if (await db.settings.get(fsrsResetKey(uid))) return
+
+  // Ratings an SM-2 build queued while offline go first; otherwise they would land after
+  // the reset and bring SM-2 schedules and logs back.
+  await waitForPendingWrites(firestore)
+  const [items, logs] = await Promise.all([
+    getDocsFromServer(userCol(uid, 'review_items')),
+    getDocsFromServer(userCol(uid, 'review_logs')),
+  ])
+
+  const cards = items.docs.filter(d => needsReset(d.data()))
+  const oldLogs = logs.docs.filter(d => typeof d.data().state !== 'number')
+  console.log('[sync] FSRS reset', { review_items: cards.length, review_logs: oldLogs.length })
+  await commitInBatches([
+    // update(), not a merge: a card deleted in the meantime fails the batch rather than
+    // coming back as a schedule with no snapshot.
+    ...cards.map(d => (b: WriteBatch) => {
+      const added = d.data().added_at
+      b.update(d.ref, { ...newSchedule(typeof added === 'number' ? added : Date.now()), ...DROP_SM2 })
+    }),
+    ...oldLogs.map(d => (b: WriteBatch) => { b.delete(d.ref) }),
+  ])
+
+  await db.settings.put({ key: fsrsResetKey(uid), value: String(Date.now()) })
 }
 
 // Mirrors one Firestore user collection into its local Dexie table.
@@ -250,6 +344,7 @@ export function subscribeToUserData(uid: string): Unsubscribe {
     subscribeCollection<ReviewItem>(uid, 'review_items', db.review_items),
     subscribeCollection<ReviewLog>(uid, 'review_logs', db.review_logs),
     subscribeCollection<Capture>(uid, 'captures', db.captures),
+    subscribeReviewSettings(uid),
   ]
 
   return () => {

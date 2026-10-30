@@ -60,8 +60,23 @@ body {
   50%       { opacity: 0.25; }
 }
 
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+
 input::placeholder {
   color: var(--text-tertiary);
+}
+
+/* The review card's answer box. Its border is the only sign of where typing goes. */
+.review-answer {
+  border: 2px solid var(--border-secondary);
+  transition: border-color 0.12s;
+}
+.review-answer:focus {
+  border-color: var(--amber-600);
 }
 
 .clickable-word {

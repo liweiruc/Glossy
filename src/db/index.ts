@@ -62,9 +62,18 @@ export interface ReviewItem {
   id: string
   type: 'word' | 'sentence'
   snapshot: WordSnapshot | SentenceSnapshot
-  ease_factor: number
-  interval_days: number
-  repetitions: number
+  // The card's FSRS state: ts-fsrs's Card, with its two dates kept as due_at and
+  // last_reviewed_at. Made and read through src/algorithms/fsrs.ts. Cards from the SM-2
+  // days carry ease_factor / interval_days / repetitions instead until the one-time reset
+  // (resetSchedulesForFsrs) starts them over; withSchedule() reads those as new.
+  state: number // 0 new · 1 learning · 2 review · 3 relearning
+  stability: number
+  difficulty: number
+  elapsed_days: number
+  scheduled_days: number
+  learning_steps: number
+  reps: number
+  lapses: number
   due_at: number
   added_at: number
   last_reviewed_at: number | null
@@ -114,12 +123,13 @@ export interface SentenceSnapshot {
   idiomatic_en: string
 }
 
+// One rating. Logs from the SM-2 days (prev_interval / new_interval, no state) are deleted
+// by the FSRS reset.
 export interface ReviewLog {
   id: string
   item_id: string
   rating: 'again' | 'hard' | 'good' | 'easy'
-  prev_interval: number
-  new_interval: number
+  state: number // the card's FSRS state when it was rated: 0 (new) marks its first rating
   reviewed_at: number
 }
 

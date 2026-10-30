@@ -7,7 +7,7 @@ import TranslateResult from './pages/TranslateResult'
 import CaptureText from './pages/CaptureText'
 import ReviewBook from './pages/ReviewBook'
 import ReviewSession from './pages/ReviewSession'
-import History from './pages/History'
+import Library from './pages/Library'
 import Settings from './pages/Settings'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -30,7 +30,8 @@ function AppRoutes() {
       <Route path="/read/:id" element={<RequireAuth><CaptureText /></RequireAuth>} />
       <Route path="/review" element={<RequireAuth><ReviewBook /></RequireAuth>} />
       <Route path="/review/session" element={<RequireAuth><ReviewSession /></RequireAuth>} />
-      <Route path="/history" element={<RequireAuth><History /></RequireAuth>} />
+      <Route path="/library" element={<RequireAuth><Library /></RequireAuth>} />
+      <Route path="/history" element={<Navigate to="/library" replace />} />
       <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

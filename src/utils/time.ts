@@ -11,14 +11,35 @@ export function relativeTime(ts: number): string {
   return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
+export function startOfToday(): number {
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  return d.getTime()
+}
+
 // Cards are due for the whole calendar day they fall on, matching dueLabel: a 1-day
 // interval set at 9pm is reviewable the next morning. Comparing against Date.now()
 // instead showed "All caught up!" while rows still read "due today".
-export function startOfTomorrow(): number {
-  const d = new Date()
+export function startOfTomorrow(now = Date.now()): number {
+  const d = new Date(now)
   d.setDate(d.getDate() + 1)
   d.setHours(0, 0, 0, 0)
   return d.getTime()
+}
+
+// "Wednesday, October 29"
+export function todayLabel(): string {
+  return new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+}
+
+// "45s", "12 min", "1 h 5 min"
+export function formatDuration(ms: number): string {
+  const seconds = Math.round(ms / 1000)
+  if (seconds < 60) return `${Math.max(0, seconds)}s`
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 60) return `${minutes} min`
+  const rest = minutes % 60
+  return `${Math.floor(minutes / 60)} h${rest ? ` ${rest} min` : ''}`
 }
 
 export function dueLabel(due_at: number): string {

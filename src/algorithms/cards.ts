@@ -1,6 +1,7 @@
 import { snapshotSenses } from '../db'
 import type { Definition, Example, ReviewItem, WordSnapshot } from '../db'
 import { markTarget } from '../utils/highlight'
+import { isMature } from './fsrs'
 
 export type CardMode = 'cloze' | 'fresh' | 'bare'
 
@@ -12,14 +13,15 @@ export interface WordCard {
   answer: string | null   // the words the blank hides, exactly as the sentence has them
 }
 
-const FRESH_FROM = 3
-
 // How a word card asks its question:
 //
 //   cloze — the sentence it was saved from, the word blanked and its meaning given as the
 //           hint: the learner produces the word, in the form the sentence needs
 //   fresh — the same, in a sentence this card has not used yet: tests the word, not the line
-//   bare  — the word alone, only when no sentence can carry the question
+//   bare  — no sentence can carry the question, so the meaning alone asks for the word
+//
+// Every mode is answered by typing the word, so whether it came to mind is never a matter
+// of the learner's own generosity.
 //
 // A sentence never asks "what does it mean here?". Recognising a meaning feels like
 // knowing it, so a learner grading themselves overrates it; a blank has one right answer,
@@ -27,7 +29,9 @@ const FRESH_FROM = 3
 //
 // A word is never tested naked while a sentence is available. Recalling a word with
 // nothing around it is the vocabulary-list habit this app exists to replace.
-export function pickWordCard(item: Pick<ReviewItem, 'snapshot' | 'repetitions'>): WordCard {
+export function pickWordCard(
+  item: Pick<ReviewItem, 'snapshot' | 'state' | 'stability' | 'reps'>,
+): WordCard {
   const snap = item.snapshot as WordSnapshot
   const senses = snapshotSenses(snap)
   const sense = senses[0] ?? null
@@ -50,9 +54,10 @@ export function pickWordCard(item: Pick<ReviewItem, 'snapshot' | 'repetitions'>)
   }
 
   // Mature cards leave the saved sentence behind, cycling through whatever else the
-  // sense offers, so the word is met in more than one situation.
-  if (item.repetitions >= FRESH_FROM && usable.length > 1) {
-    const { example, answer } = usable[1 + ((item.repetitions - FRESH_FROM) % (usable.length - 1))]
+  // sense offers, so the word is met in more than one situation. A card forgotten since
+  // goes back to its own sentence while it is relearned.
+  if (isMature(item) && usable.length > 1) {
+    const { example, answer } = usable[1 + (item.reps % (usable.length - 1))]
     return { mode: 'fresh', senses, sense, example, answer }
   }
 
@@ -60,13 +65,15 @@ export function pickWordCard(item: Pick<ReviewItem, 'snapshot' | 'repetitions'>)
   return { mode: 'cloze', senses, sense, example, answer }
 }
 
-// The line above the question.
-export function cardPrompt(card: Pick<WordCard, 'mode' | 'answer'>): string {
-  if (card.mode === 'bare') return 'recall the meaning'
-  return card.answer && /\s/.test(card.answer.trim()) ? 'fill in the missing words' : 'fill in the missing word'
+// What the learner has to type: the words the blank hides, or the word itself when there
+// is no blank.
+export function cardAnswer(card: Pick<WordCard, 'answer'>, lemma: string): string {
+  return card.answer ?? lemma
 }
 
-// The line above the sentence once the answer is showing: where that sentence came from.
-export function sentenceSource(mode: CardMode): string {
-  return mode === 'fresh' ? 'a sentence you have not seen before' : 'from your saved sentence'
+// The line above the question.
+export function cardPrompt(card: Pick<WordCard, 'mode' | 'answer'>, lemma: string): string {
+  const words = cardAnswer(card, lemma).trim().split(/\s+/).length
+  if (card.mode === 'bare') return words > 1 ? `type the ${words} words` : 'type the word'
+  return words > 1 ? `fill in ${words} words` : 'fill in the missing word'
 }

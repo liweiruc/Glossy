@@ -6,6 +6,7 @@ import type { TranslationCache, SentenceSnapshot } from '../db'
 import { translateText, generateTranslation, getCachedTranslation } from '../api/translate'
 import { getErrorMessage } from '../api/llm'
 import { addReviewItem } from '../db/queries'
+import { newSchedule } from '../algorithms/fsrs'
 import { useToast } from '../components/Toast'
 import WordPopup from '../components/WordPopup'
 import ClickableText from '../components/ClickableText'
@@ -56,7 +57,7 @@ export default function TranslateResult() {
             if (!cancelled) setStreaming(true)
           })
         } else {
-          // From History / Review / direct URL: both cache tiers, no LLM, no history
+          // From the Library / direct URL: both cache tiers, no LLM, no history
           result = await getCachedTranslation(hash!)
         }
         if (cancelled) return
@@ -130,12 +131,8 @@ export default function TranslateResult() {
         formal_en: version === 'formal' ? en : '',
         idiomatic_en: version === 'idiomatic' ? en : '',
       } as SentenceSnapshot,
-      ease_factor: 2.5,
-      interval_days: 0,
-      repetitions: 0,
-      due_at: now,
+      ...newSchedule(now),
       added_at: now,
-      last_reviewed_at: null,
     })
     setAddedVersions(prev => new Set([...prev, version]))
     showToast('Added to review')
@@ -153,12 +150,8 @@ export default function TranslateResult() {
         formal_en: data.formal_en,
         idiomatic_en: data.idiomatic_en,
       } as SentenceSnapshot,
-      ease_factor: 2.5,
-      interval_days: 0,
-      repetitions: 0,
-      due_at: now,
+      ...newSchedule(now),
       added_at: now,
-      last_reviewed_at: null,
     })
     setAllAdded(true)
     showToast('Added to review')

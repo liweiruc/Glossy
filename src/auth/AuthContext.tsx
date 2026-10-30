@@ -9,9 +9,18 @@ import {
 import { firebaseAuth } from '../firebase'
 import {
   pushLocalOnlyItems,
+  resetSchedulesForFsrs,
   subscribeToUserData,
   verifyFirestoreAccess,
 } from '../db/firestore-sync'
+
+// The one-time upload, then the one-time FSRS reset — in that order, so the reset sees
+// whatever the upload sends.
+function syncOnce(uid: string) {
+  pushLocalOnlyItems(uid)
+    .then(() => resetSchedulesForFsrs(uid))
+    .catch(e => console.error('[sync upload]', e))
+}
 
 interface AuthContextValue {
   user: User | null
@@ -52,8 +61,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // because setDoc+persistentLocalCache resolves on local write.
         verifyFirestoreAccess(uid).catch(() => { /* already logged */ })
 
-        // Then non-destructively push only items that are missing from the remote.
-        pushLocalOnlyItems(uid).catch(e => console.error('[sync upload]', e))
+        // Then non-destructively push only items that are missing from the remote, and
+        // start SM-2 cards over for FSRS.
+        syncOnce(uid)
       }
     })
 
@@ -67,9 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     function handleOnline() {
       const uid = firebaseAuth.currentUser?.uid
-      if (uid) {
-        pushLocalOnlyItems(uid).catch(e => console.error('[sync upload]', e))
-      }
+      if (uid) syncOnce(uid)
     }
     window.addEventListener('online', handleOnline)
     return () => window.removeEventListener('online', handleOnline)

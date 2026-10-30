@@ -13,7 +13,7 @@ interface LLMWordResponse {
 }
 
 // The cache tiers alone: local IndexedDB, then the shared Firestore cache. Never calls
-// the LLM and never records history. Screens opened from History or the review book
+// the LLM and never records history. Screens opened from the Library or a review session
 // must not stop at IndexedDB — it is empty on any device that didn't run the lookup
 // itself, while the synced history and review rows still point at the word.
 export async function getCachedWord(lemma: string): Promise<WordCache | null> {

@@ -10,7 +10,7 @@ interface Props {
   def: Definition
   lemma: string
   chinese: ChineseDisplay
-  size?: 'full' | 'compact' | 'answer'
+  size?: 'full' | 'compact' | 'answer' | 'intro'
   maxExamples?: number
   onWordClick?: (word: string) => void
   action?: ReactNode
@@ -19,8 +19,32 @@ interface Props {
 const SIZES = {
   full: { pos: 14, def: 17, defWeight: 400, example: 16, gap: 8, toggleRow: 44 },
   compact: { pos: 13, def: 17, defWeight: 400, example: 14, gap: 6, toggleRow: 38 },
-  // Revealing a review card: the meaning is the answer, so it is the largest thing there.
+  // The meaning is the answer to "what does it mean in this sentence?" (the Read page), so
+  // it is the largest thing there.
   answer: { pos: 13, def: 23, defWeight: 500, example: 16, gap: 8, toggleRow: 44 },
+  // Meeting a new card before it is asked: the sentence is read as closely as the meaning.
+  intro: { pos: 14, def: 21, defWeight: 400, example: 18, gap: 10, toggleRow: 44 },
+}
+
+// The "中文" chip a Chinese line folds behind. Exported so a translation shown outside a
+// SenseBlock (a review card's answer side) folds the same way.
+export function ChineseToggle({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  return (
+    <button
+      onClick={onToggle}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+        height: 26, padding: '0 10px',
+        border: '0.5px solid var(--border-secondary)', borderRadius: 8,
+        background: open ? 'var(--bg-secondary)' : 'none',
+        color: open ? 'var(--text-secondary)' : 'var(--text-tertiary)',
+        fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
+      }}
+    >
+      中文
+      {open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+    </button>
+  )
 }
 
 // One sense of a word, rendered the same way everywhere it appears: the English
@@ -80,20 +104,7 @@ export default function SenseBlock({ def, lemma, chinese, size = 'full', maxExam
 
       {chinese === 'tap' && (
         <div style={{ minHeight: s.toggleRow, display: 'flex', alignItems: 'center' }}>
-          <button
-            onClick={() => setRevealed(r => !r)}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 4,
-              height: 26, padding: '0 10px',
-              border: '0.5px solid var(--border-secondary)', borderRadius: 8,
-              background: revealed ? 'var(--bg-secondary)' : 'none',
-              color: revealed ? 'var(--text-secondary)' : 'var(--text-tertiary)',
-              fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
-            }}
-          >
-            中文
-            {revealed ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-          </button>
+          <ChineseToggle open={revealed} onToggle={() => setRevealed(r => !r)} />
         </div>
       )}
 
@@ -116,7 +127,8 @@ export default function SenseBlock({ def, lemma, chinese, size = 'full', maxExam
             <div style={{ fontSize: s.example, color: 'var(--text-primary)', lineHeight: 1.5, fontStyle: 'italic' }}>
               {exampleText(ex)}
             </div>
-            {showChinese && (
+            {/* A sentence the learner met in their own reading comes without a translation */}
+            {showChinese && ex.cn && (
               <div style={{ fontSize: s.example, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                 {ex.cn}
               </div>

@@ -56,7 +56,7 @@ export default function LookupResult() {
             if (!cancelled) setStreaming(true)
           })
         } else {
-          // From History / Review / direct URL: both cache tiers, no LLM, no history
+          // From the Library / Review / direct URL: both cache tiers, no LLM, no history
           data = await getCachedWord(lemma!)
         }
         if (!cancelled) {

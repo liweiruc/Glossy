@@ -1,10 +1,10 @@
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Home, BookOpen, Clock } from 'lucide-react'
+import { Home, BookOpen, Library } from 'lucide-react'
 
 const TABS = [
   { path: '/', label: 'Home', Icon: Home },
   { path: '/review', label: 'Review', Icon: BookOpen },
-  { path: '/history', label: 'History', Icon: Clock },
+  { path: '/library', label: 'Library', Icon: Library },
 ] as const
 
 export default function BottomNav() {

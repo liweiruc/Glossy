@@ -15,7 +15,7 @@
 
 - **Home**：图标 `Home`，文字"Home"
 - **Review**：图标 `BookOpen`，文字"Review"
-- **History**：图标 `Clock`，文字"History"
+- **Library**：图标 `Library`，文字"Library"（原 History；旧地址 `/history` 重定向到 `/library`）
 
 样式规则：
 
@@ -146,7 +146,7 @@ Body（padding 水平 18px，可滚动）
 
 ### DefinitionList
 
-每个释义块由 `SenseBlock`（`src/components/SenseBlock.tsx`）渲染，查词页、翻译浮层、复习卡揭晓面共用同一个组件（`size="full"` / `"compact"` 只改字号）：
+每个释义块由 `SenseBlock`（`src/components/SenseBlock.tsx`）渲染，查词页、翻译浮层、语境采集页、复习介绍卡共用同一个组件（`size="full"` / `"compact"` / `"answer"` / `"intro"` 只改字号）：
 
 - 首行：词性 pill + 语体标签 + 右侧操作槽（`action`）
   - 查词页和浮层往 `action` 里放 `AddSenseButton`：18px 的 `Plus`（三级色），点击后变成琥珀色 `Check`；图标虽小，点击区域是 44px
@@ -277,229 +277,275 @@ CtaBar（固定底部）
 
 ## 屏幕 5：复习本（Review Book）
 
+仿 wordloom 的"复习"页：只看今天这一轮和统计，不列卡片——浏览、搜索、筛选、删除都在词库（屏幕 8）。页上的数字全部由现有的 `review_items` / `review_logs` 和复习设置现算（`getReviewOverview()`，`src/db/queries.ts`），只读不写。
+
 ### 布局
 
 ```
 StatusBar
 AppBar
-  左："Review"（18px weight500，正常色）
-  右：Search 图标（复习本内搜索，MVP 可暂不实现）
-Body（padding 水平 18px）
-  DueCard（今日待复习卡片）
-  SubTabBar（Words / Sentences）
-  ReviewItemList（可滚动）
+  左：日期（14px 三级色，如 "Thursday, October 29"）
+      "Review"（23px weight500，正常色）
+  右：StreakBadge（连续天数 > 0 时才有）
+Body（padding 水平 18px，可滚动）
+  TodayPanel（今天这一轮）
+  StatGrid（2×2 统计格）
 BottomNav（Review 激活）
 ```
 
-### DueCard
+### StreakBadge
 
-- 背景：`#FAEEDA`（琥珀 50），圆角 14px，内边距 18px 16px，margin 6px 0 14px
-- 内容居中：
-  - 待复习数字：36px，weight 500，`#633806`，行高 1
-  - 标签："due today"（12px，`#854F0B`，margin-top 4px）
-  - 按钮"Start review"（margin-top 12px）：
-    - 背景 `#BA7517`，白色文字，13px weight500，圆角 8px，内边距 9px 22px
-    - 点击导航到复习会话（屏幕 6/7）
-- 若今日无待复习项（due 数为 0）：
-  - 按钮改为"All caught up!"，置灰不可点
+- `Flame` 15px + "N-day streak"（14px weight500）
+- 琥珀 50 底、琥珀 700 字，圆角 8px，内边距 5px 10px
+- 连续天数：每天至少有一条 review_log 算一天，从今天往前数；今天还没复习就从昨天数起——一早打开不会显示"断了"
 
-### SubTabBar
+### TodayPanel
 
-- 两个 tab：**Words N**（N 为单词总数）和 **Sentences N**
-- 样式：pill 形按钮，圆角 14px
-  - 激活：背景 `#412402`（琥珀 900），白色文字，12px
-  - 非激活：二级背景色，次要文字色，12px
-- 切换后 ReviewItemList 内容随之过滤
+- 0.5px 二级边框，圆角 14px，内边距 16px
+- 三列：**Due**（到期的老卡，每天上限 `reviewsPerDay`）/ **New**（从没复习过的卡，每天上限 `newPerDay`）/ **Learning**（还在学习步骤里的卡：新卡刚学、或忘了在重学）——两个上限在设置页的 Review 里改（屏幕 9），默认 200 / 20
+  - 标签 14px 次要色，数字 36px weight500
+  - 数字来自 `buildDailyQueue()`（规则见屏幕 6 的"队列"），已经扣掉留到明天的义项，和进会话后的计数一致
+- 有卡：按钮 "Start review"——`GraduationCap` 19px + 文字，琥珀橙底白字，18px weight500，高 46px，圆角 10px，占满宽度；点击进入复习会话（屏幕 6/7）
+- 没卡：`PartyPopper`（琥珀橙）+ "All done for today"（17px 次要色），不可点
+- 按钮下面最多三行说明（14px 三级色，居中），解释能学却不在今天这一轮里的卡：
+  - 有义项被留到明天时："1 more meaning waits for tomorrow: one meaning per word a day"（多个时为 "N more meanings wait …"）——这些卡在词库里仍显示 due today / overdue / new
+  - 老卡超出当天上限时："1 more review waits for tomorrow: 200 reviews a day"（多个时为 "N more reviews wait …"）。留在今天的是最快要忘的；其余算进 Tomorrow
+  - 新卡超出当天上限时："1 more new card waits for later days: 20 new a day"（多个时为 "N more new cards wait …"）。换 FSRS 时整本卡都重置成了新卡，头几周这一行会一直在
+  - 后两行里的数字是复习设置里的当前上限
 
-### ReviewItemList
+### StatGrid
 
-每行（ReviewItem）：
+两列网格，gap 10px。每格是 `StatTile`（`src/components/StatTile.tsx`）：0.5px 二级边框，圆角 12px，内边距 12px 14px；标签 14px 次要色，数值 23px weight500，副标 13px 三级色（单行截断）。
 
-- flex 横排，两端对齐，padding 10px 2px，底部 0.5px 三级分隔线
-- 左侧（Left）：
-  - 词或句子原文（18px，正常色），超出截断加省略号
-  - 单词卡还有一行义项释义（14px，次要色，超出截断）——同一个词按义项可以出现多张卡，光看词头分不出是哪一张
-  - 下次复习时间（14px，三级色）：
-    - 当天："due today"
-    - 明天："due tomorrow"
-    - N 天后："in N days"
-    - 已逾期："overdue（红色）"
-- 右侧（Right）：掌握程度圆点（5 个 `●`）
-  - 亮点数 = min(repetitions, 5)
-  - 亮色：`#BA7517`；暗色：三级边框色
-  - 圆点大小：6px × 6px，间距 3px
-- 长按或左滑显示"删除"操作（从复习本移除，不删除缓存）
+| 格 | 数值 | 副标 |
+|----|------|------|
+| Reviewed today | 今天的评分次数（今天的 review_logs 条数） | "N new"：今天第一次复习的卡 |
+| Recalled | 今天每张卡**第一次**作答没评 Again 的比例；今天还没复习时为 "—" | "first try today" |
+| Tomorrow | 明天到期的老卡（学过的），加上今天被留到明天的老卡义项、超出今天复习上限的老卡；今天这一轮里的卡当作今天会做完。新卡不算，它们每天来多少由上限决定 | "card due" / "cards due" |
+| Cards | 复习本卡片总数 | "N words · M sentences"（单复数随数目） |
 
----
+记住率只算每张卡当天的第一次作答：学习步骤里的重问都在看过答案几分钟之后，算进去就虚高了。"N new" 数的是今天日志里评分前 `state` 为 0 的卡。
 
-## 屏幕 6：复习卡（回忆面）
+### 空状态（复习本一张卡都没有）
 
-### 布局
-
-全屏复习模式，无 BottomNav。
-
-```
-StatusBar
-AppBar
-  左：X 图标（退出复习，返回复习本主屏）
-  中：进度指示（如"3 / 12"，11px 次要色）
-  右：空白占位（保持居中）
-CardFront（flex-1，居中布局）
-  ProgressHint
-  MainContent（单词或中文句子）
-  SubHint
-  ShowButton
-```
-
-### CardFront
-
-单词卡有三种形态，由 `pickWordCard()`（`src/algorithms/cards.ts`）选出。只要手上有句子，就把词挖空、给出释义，让学习者自己想出这个词和它在句中的词形——不问 "What does it mean here?"，也绝不光考一个孤零零的词。
-
-| 形态 | 触发条件 | 正面长什么样 |
-|------|----------|--------------|
-| `cloze` | 默认（从第一次复习起），且句中能定位到目标词 | 保存时的那句话，目标词挖空，英文释义作为 Hint 给出 |
-| `fresh` | `repetitions >= 3`，且可用的句子多于一条 | 同样挖空，换一句这张卡还没用过的句子，顶部挂 "new example" 标签 |
-| `bare` | 没有一句能定位到目标词（多为 schema 2 之前的老词条） | 退回原来的大字词头（42px），回忆意思 |
-
-- 整个 Body 垂直水平居中
-- **ProgressHint**（顶部，14px 三级色）：`cardPrompt()` 给出——`cloze` / `fresh` 是 "fill in the missing word"（答案是多词短语时为 "words"），`fresh` 上方另配 "new example" 胶囊（二级背景、圆角 8px、13px 次要色）；`bare` 是 "recall the meaning"；句子卡仍是 "translate this sentence"
-- **MainContent**：
-  - 单词卡（有句子）：例句 23px，行高 1.7，最大宽度 300px，居中；目标词挖成 `display: inline-block` 的空白，底线 2px，宽度按答案长度估算（64–190px）——透露长度，但不透露拼写
-  - 单词卡（`bare`）：英文单词，42px，weight 500，字母间距 -1px
-  - 句子卡：中文原句，23px，行高 1.6，最大宽度 280px，居中
-- **Hint 框**（有句子的单词卡）：二级背景，圆角 10px，内边距 12px 14px；"HINT"（13px 三级色全大写）+ 英文释义（17px）；答案是多词短语时再加一行 "N words"
-- **SubHint**：只有 `bare` 和句子卡有，"tap to reveal"（16px 三级色）；挖空卡不出这一行（Hint 框已经是提示）
-- **ShowButton**："Show answer"
-  - 透明背景，0.5px 二级边框，圆角 8px，内边距 9px 22px，13px 正常色
-  - 点击：卡片翻到揭晓面（动画：Y 轴 flip，duration 300ms）
+- 不显示 TodayPanel 和 StatGrid；居中，内边距 56px 12px
+- `BookOpen` 36px 三级色（`display: block; margin: 0 auto`——Tailwind 的 preflight 把 svg 设成了块级，光靠 `text-align: center` 居中不了）
+- "Nothing to review yet"（18px weight500）
+- "Look up a word and add a meaning — it shows up here, ready to practice."（16px 次要色）
+- 按钮 "Look up a word"（琥珀橙底白字，18px，圆角 10px）→ 首页
 
 ---
 
-## 屏幕 7：复习卡（揭晓面）
+## 屏幕 6：复习会话（提问）
+
+仿 wordloom 的"复习"：单词卡要**打出**这个词，系统判对错、给建议评分。会话逻辑在 `StudySession`（`src/algorithms/session.ts`），纯逻辑、不碰 React 和数据库，读写经注入的 `saveRating` / `undoRating`（`src/db/queries.ts`）。
 
 ### 布局
 
+全屏，无 BottomNav。
+
 ```
 StatusBar
-AppBar（同回忆面）
-CardBack（flex-1，可滚动）
-  WordHeader 或 SentenceHeader
-  DefinitionArea 或 TranslationArea
-RatingBar（固定底部）
+SessionBar
+  左：X（结束复习，回复习本；键盘 Esc）
+  中：进度条（高 6px，圆角 3px，二级背景；琥珀橙填充 = Done / 本轮总数）
+  右：Undo（Undo2 图标 + "Undo"，16px 次要色；没有可撤销的就隐藏；键盘 Ctrl/⌘+Z）
+  第二行：New N · Review N · Learning N · Done N（13px 次要色，Done 为三级色，等宽数字）
+Card（flex-1，可滚动，内边距 20px 18px 28px）
+Footer（固定底部，0.5px 三级上边框）：按钮，或 RatingBar
 ```
 
-### 单词卡揭晓面
+鼠标点按钮不会把焦点留在按钮上（会话根节点的 `onMouseDown` 拦掉了），否则点过"中文"或 Undo 之后按 Enter，按的是那个按钮而不是检查 / 评分；Tab 照常能聚焦按钮。手机上点提示时软键盘也因此不会收起。
 
-**问题区**（顶部，padding 14px 18px 0）：
+### 队列
 
-- 句子来源（14px 三级色，`sentenceSource()`）："from your saved sentence" / "a sentence you have not seen before"
-- 刚才那句话（17px 次要色，行高 1.55），挖掉的词填回去，转为正常色加粗——答案首先要看得见：想到的词、用的词形对不对，一眼就能核对
-- `bare` 卡没有句子，这里是 "recall the meaning" + 词头（36px）
+开场时读一次复习设置（屏幕 9），由 `getTodayQueue(settings)` → `buildDailyQueue()`（`src/algorithms/queue.ts`）一次排定，会话中不再变——这一轮里改设置，下一轮才生效：
 
-**答案区**（padding 0 18px，可滚动）：
+1. **Learning** 在最前：FSRS 状态为 Learning / Relearning、今天到期的卡，按到期时间，全部出——学习步骤必须当天走完
+2. **Review**（复习过的老卡）按可提取度升序：FSRS 算出的此刻想得起来的概率，最快要忘的先出。**每天最多 `reviewsPerDay` 张**（默认 200），今天已评过的复习（日志里评分前 `state` 为 Review）也算，超出的计入 `reviewsWaiting`，留到明天
+3. **New**（FSRS 状态 New）默认按 `added_at` 降序（`newOrder: 'newest'`）：刚查的词最想学；"全部加入"给主义项盖最晚的时间戳，所以主义项打头。设成 `oldest` 时按这个词最早加入的时间升序，同一个词内仍是主义项打头。**每天最多 `newPerDay` 张**（默认 20），今天已第一次评过的也算，超出的计入 `newWaiting`。新卡均匀穿插在老卡之间（`interleave()`），不攒到最后
+4. **每个词每天只出一张卡**：`studyKey()` 按词头归并。一个义项填过空，答案就是这个词，再问它的别的义项等于白送。其余义项留到明天（`held`）——卡片一个字段都不改，只是今天不出。今天已经复习过的词（看今天的 review_logs）也算占过名额。Learning 的卡不受此限
 
-- 挖空卡（`cloze` / `fresh`）问的是词，所以**词头在最前**：单词 36px weight 500 + 音标 16px 三级色 + `Volume2`（13px 琥珀橙）
-  - 下面才是释义：`SenseBlock size="full"`（释义 17px）——它刚才已经作为 Hint 出现过，这里退回正常阅读字号
-- `bare` 卡问的是意思，所以**释义第一、最大**：`SenseBlock size="answer"`——词性 pill（13px）+ 释义 23px weight 500 + "中文"chip；下方才是单词 17px 次要色 + 音标 16px 三级色 + `Volume2`
-- 两种都只补一条别的例句：正面已经出现过的那句会被排除（有就补，没有就不补）
-- 拆分义项之前的老卡片（`definitions` 数组）走另一条分支：逐条 `SenseBlock size="compact"`；挖空卡上方照样有词头，`bare` 卡则先出 UK/US 音标行
-- 注意：此处用的是 snapshot 快照，不是缓存中的当前数据
+会话中：
 
-### 句子卡揭晓面
+- 评完仍在学习步骤里、且今天之内到期的卡放回队列，计入 Learning，到点再出：默认步骤下新卡 Again 1 分钟、Hard 6 分钟、Good 10 分钟，复习卡评 Again 10 分钟。步骤在复习设置里改；重学步骤留空时，复习卡评 Again 直接按天排，不回到这一轮。到点的学习卡排在最前
+- 复习设置开了 **Pronounce words** 时：介绍卡一出现、单词卡揭晓答案时读出这个词（句子卡不读）
+- 别的卡都出完了，就提前出 20 分钟内到期的学习卡（learn ahead），会话不会停在等待上——卡少的时候，新卡学完一步会紧接着再问一次
+- 新的单词卡先出 IntroCard，"Got it, test me" 之后隔 3 张（`INTRO_GAP`）再考
+- 别的设备同步过来的新卡要等下一轮
 
-**SentenceHeader**（padding 14px 18px 0）：
+### IntroCard（新卡第一次出现）
 
-- 中文原句（14px，次要色，行高 1.5）
+只给从没复习过的单词卡；居中排版。
 
-**TranslationArea**（padding 0 18px，可滚动）：
+- 标签胶囊（13px weight500，琥珀 50 底、琥珀 700 字，圆角 8px）：这个词还没有复习过的卡 → "New word"；复习过它的别的义项 → "New meaning"
+- 词头 42px weight500，字间距 -1px + 发音按钮（`Volume2` 20px 琥珀橙）
+- UK / US 音标（16px 次要色）
+- 义项框（0.5px 二级边框，圆角 14px）：`SenseBlock size="intro"`——词性 14px、释义 21px、例句 18px。例句只放一句：就是之后挖空要用的那句
+- 拆分义项之前的老卡（`definitions` 数组）：其余义项收在 "Other meanings on this card (N)" 折叠块里（`SenseBlock size="compact"`）
+- Footer："I know this"（次按钮；直接按 Easy 记一次，不再考；键 K）+ "Got it, test me"（主按钮；键 Enter / Space）；P 发音
 
-- 三个版本纵向排列，每个版本：
-  - 风格标签（11px 全大写，`#854F0B`，margin-bottom 5px）
-  - 英文译文（14px，正常色，行高 1.5）
-  - 版本间距：margin-bottom 14px
-- 若 `idiomatic_note` 不为 null，在地道版本下方显示小灰字说明
+### WordCard（打字作答）
+
+`pickWordCard()`（`src/algorithms/cards.ts`）选出题形态，三种都是输入**这个词**，只是题面不同：
+
+| 形态 | 题面 | 要输入 |
+|------|------|--------|
+| `cloze` | 英文释义 + 挖空的句子 | 句子里的那个词形（struck、running） |
+| `fresh` | 同上，换一句这张卡没用过的句子，顶行挂 "new sentence" 标签 | 同上 |
+| `bare` | 找不到能定位目标词的句子：只有英文释义 | 词头本身 |
+
+- 顶行：词性胶囊（14px 斜体，琥珀 50 底、琥珀 700 字）+ 语域（非 neutral 时，14px 三级色）+ `fresh` 的 "new sentence" 标签；右侧 `cardPrompt()`（14px 三级色）："fill in the missing word" / "fill in N words"，`bare` 为 "type the word" / "type the N words"
+- 英文释义：21px，行高 1.4。这是题面，不走 `SenseBlock`（中文要藏到提示里）
+- 句子框（有句子时）：0.5px 二级边框，圆角 14px，内边距 16px 18px；句子 23px 斜体，行高 1.6；目标词挖成 `inline-block` 空白，2px 正常色底线，宽度按答案长度估算（56–190px）——透露长度，不透露拼写
+- 输入框（`.review-answer`）：高 54px，圆角 12px，21px 居中；2px 二级边框，聚焦时琥珀橙；关掉自动更正、自动大写、拼写检查，软键盘回车键为 "go"；进卡自动聚焦。占位文字 "Type the missing word"（`bare`："Type the word"）
+- 按钮行（gap 8px）：
+  - 提示（`Lightbulb` + 下一步提示的名字；二级背景、16px 次要色、高 42px；Ctrl+H）
+  - "Don't know"（同样式；Ctrl+G）
+  - "Check"（琥珀橙主按钮，高 42px，占满剩余宽度；Enter）。答案为空时点 Check 只让输入框抖一下
+- 提示分两步，用完按钮消失：
+  1. 中文：义项有中文、且 `chinese_display` 不是 `never` 时才有这一步；释义下方一行 `Lightbulb` + 中文（17px 次要色）
+  2. 首字母 + 长度：输入框下方 "r _ _ _ _ _ _"（等宽 21px 次要色；多词答案每个词一组）
+  - 用过提示，答对也只建议 Hard
+
+### SelfCard（心里作答，自己评分）
+
+- 句子卡：顶部 "translate this sentence"（14px 三级色），中文原句 23px 居中，行高 1.6
+- 一个义项都没有的单词卡（无从出题，极少见）："recall the meaning" + 词头 42px
+- Footer："Show answer"（次按钮，占满宽度；Enter / Space）
+
+---
+
+## 屏幕 7：复习会话（揭晓与评分）
+
+### 单词卡揭晓
+
+点 Check 或 Don't know 后，题面原地变成答案（淡入 0.15s），不翻页：
+
+- 句子框里的空填回去：目标词加粗、琥珀 50 底——先看这句话要的是哪个词形
+  - 例句有中文时下面挂"中文"chip（`chinese_display` 控制，与 `SenseBlock` 共用 `ChineseToggle`）；用户自己采集的句子没有中文，不显示
+- **Verdict**（`judgeAnswer()`，`src/algorithms/answer.ts`），配色借用评分按钮，所以下面的建议评分不会出人意料：
+
+| 结果 | 判定 | 显示 | 建议评分 |
+|------|------|------|----------|
+| correct | 与答案相同。先归一：不分大小写，弯引号、各种横线、句末标点、多余空格都抹平；连字符和空格可互换 | 绿：`CircleCheck` + "Correct" + 答案 | Good（用过提示则 Hard） |
+| wrong_form | 逐词还原成原形后相同，或打的是词头而句子要别的形式 | 琥珀：`TriangleAlert` + "Right word, wrong form" + "The sentence needs this form." + 对比 | Hard |
+| typo | 答案 ≥ 4 个字母且编辑距离 ≤ 1（≥ 8 个字母时 ≤ 2；相邻两字母对调算 1） | 琥珀："Almost — check the spelling" + 对比 | Hard |
+| wrong | 其余 | 红：`CircleX` + "Not quite" + 对比 | Again |
+| gave_up | 点了 Don't know | 红："The answer is" + 答案 | Again |
+
+- 对比（两行网格，等宽 21px）："Yours" 一行，对不上的字母加 2px 下划线；"Answer" 一行加粗，对不上的字母衬白底。按码点比较，输入 emoji 也不会错位
+- 词头框（0.5px 二级边框，圆角 14px）：词头 36px weight500 + 发音按钮 + 音标；义项的中文同样收在"中文"chip 后
+- 老卡其余义项：同 IntroCard 的折叠块
+
+### 句子卡揭晓
+
+- 原句下方一条 0.5px 三级分隔线，之后是 casual / formal / idiomatic 三个版本（只列有内容的）
+  - 风格标签 14px 全大写，`#854F0B`，margin-bottom 5px
+  - 英文译文 18px 正常色，行高 1.5；版本间距 14px
+- 句子卡不判对错，RatingBar 上没有建议
 
 ### RatingBar（固定底部）
 
-- 顶部：0.5px 三级边框
-- 内边距：10px 14px 14px
-- 四个评分按钮，`grid-template-columns: repeat(4, 1fr)`，gap 6px
+- 四个按钮，`grid-template-columns: repeat(4, 1fr)`，gap 6px；圆角 10px，padding 10px 4px
+  - 上行评分名称 16px weight500；下行这一档的下次间隔（`formatInterval()`：`<1m` / `10m` / `5h` / `3d` / `1.5mo` / `2.1y`），13px，opacity 0.75
+  - 间隔在揭晓答案那一刻由 `StudySession.reveal()` 算好并缓存，评分时原样写入：FSRS 开了 fuzz，评分时重算会和按钮上显示的不一样
+  - **Again** `#FCEBEB` / `#791F1F`，**Hard** `#FAEEDA` / `#854F0B`，**Good** `#EAF3DE` / `#27500A`，**Easy** `#E6F1FB` / `#0C447C`
+- 建议的那一档：外圈 2px 描边，头顶挂 "Suggested" 小标签（13px，正常色底、反色字）。只是建议，点哪档都算
+- 键盘：Enter = 建议的那档，1–4 = Again / Hard / Good / Easy，P = 发音
+- 点下立即：
+  1. 揭晓时算好的那一档 FSRS 状态由 `saveRating()` 写回卡片，并写一条 review_logs（带评分前的 `state`）——每张卡评完就落库，中途退出不丢进度
+  2. 卡片若已在别的设备上被删：什么都不写、不计数、不进撤销栈——对已删除的卡 merge 写会把它复活
+  3. 进入下一张，无需确认
 
-每个 RatingButton：
+### 撤销
 
-- 圆角 8px，无边框，padding 10px 4px
-- 上行：评分名称（11px，weight500）
-- 下行：下次复习间隔预览（10px，opacity 0.75）
-  - 由当前 item 状态实时计算，应用 SM-2 公式后得出
-- 颜色方案：
-  - **Again**：背景 `#FCEBEB`，文字 `#791F1F`
-  - **Hard**：背景 `#FAEEDA`，文字 `#854F0B`
-  - **Good**：背景 `#EAF3DE`，文字 `#27500A`
-  - **Easy**：背景 `#E6F1FB`，文字 `#0C447C`
-- 点击后立即：
-  1. 调用 SM-2 算法更新 item 状态
-  2. 写入 review_logs
-  3. 将结果写入 IndexedDB（每张卡评分后立即持久化，不等到会话结束）
-  4. 进入下一张卡（无需确认）
+- SessionBar 的 Undo 或 Ctrl/⌘+Z：回到上一张卡重新作答，可以一路撤回本轮第一张
+- `undoRating()` 把卡片整套 FSRS 字段（`state`、`stability`、`difficulty`、`reps`、`lapses`……`due_at`、`last_reviewed_at`）恢复原样，删掉那条 review_log（本地 + Firestore）；卡片已被删就不写回
+- 那次评分放回队列的学习步骤一并撤掉，统计同步回退
+- 输入框里有字时，Ctrl+Z 撤的是打字，不是上一张卡
 
 ### 复习完成屏
 
-全部卡片评分完毕后显示：
-
-- 居中布局
-- 图标：`CheckCircle`（绿色，48px）
-- 标题："Session complete"（20px weight500）
-- 统计：
-  - "Reviewed: N"
-  - "Remembered: N"（Good + Easy 的数量）
-  - "Need more practice: N"（Again 的数量）
-  - 字号 14px，次要色，行高 2
-- 按钮"Back to review book"：导航回复习本主屏
+- 居中：`PartyPopper` 44px 琥珀橙 + "Session complete"（29px weight500）；一开始就没有卡时是 "Nothing to review right now"，不显示统计
+- 2×2 `StatTile`：
+  - Reviewed：本轮评分次数（Again 后的重问也算）
+  - Recalled：没评 Again 的比例
+  - New：第一次复习的新卡数
+  - Time：本轮用时（"45s"、"12 min"、"1 h 5 min"）
+- 本轮评过 Again 的词列成 chip（17px，0.5px 二级边框，圆角 8px），上方一行 "These slipped this time — worth another look:"，点开去查词页
+- Footer："Back to review"（主按钮，占满宽度）→ 复习页
 
 ---
 
-## 屏幕 8：历史记录（History）
+## 屏幕 8：词库（Library）
+
+路由：`/library`（旧的 `/history` 重定向过来），需登录。仿 wordloom 的词库：查过的、加进复习的、读过的都在这里，分词 / 句子 / 段落三栏，每栏都能搜、能筛、能排。数据由 `loadLibrary()`（`src/db/library.ts`）从本地 IndexedDB 现拼——history 和复习卡按词（词头小写）/ 句子（`hashText(source_text)`）归成一条，一个词查了五次、加了两个义项，也只是一行。
 
 ### 布局
 
 ```
-StatusBar
-AppBar
-  左："History"（18px weight500）
-  右：Filter 图标（预留，MVP 暂不实现）
+AppBar（高 48px）
+  左："Library"（23px weight500）
 Body（padding 水平 18px，可滚动）
-  按日期分组的 HistoryList
-BottomNav（History 激活）
+  TabPills（Words N / Sentences N / Passages N）
+  SearchBox
+  Filters（Status + Sort；Passages 只有 Sort）
+  列表（Recent 排序时按天分组："Today" / "Yesterday" / "Oct 27"，14px 三级色）
+BottomNav（Library 激活）
 ```
 
-### HistoryList
+### TabPills
 
-按 queried_at 日期分组，从新到旧。
+- pill 按钮，圆角 14px，内边距 5px 14px，16px，gap 8px
+- 激活：背景 `#412402`（琥珀 900），白字；非激活：二级背景色，次要文字色
+- 数字是这一栏的条目总数，不随搜索、筛选变
 
-**日期分组标题**（DayDivider）：
+### SearchBox
 
-- 文字："Today" / "Yesterday" / 具体日期（如"May 6"）
-- 11px，三级色，padding 10px 0 4px 2px
+- 高 44px，二级背景，圆角 10px；左 `Search` 16px 三级色，有字时右侧 `X` 清空
+- placeholder 随栏目："Search words or meanings" / "Search sentences" / "Search passages"
+- 不分大小写的子串匹配：词栏搜词头和所有已知义项的英文、中文释义；句子栏搜中文原文和译文；段落栏搜原文和出处
+- 输入框用本地 state，同时写进 URL 的 `q`——由 URL 驱动的受控输入会在 React Router 的 transition 里丢字
 
-**HistoryItem**（每行）：
+### Filters
 
-- flex 横排，垂直居中，gap 10px，padding 10px 2px，底部 0.5px 三级分隔线
-- 左：类型图标（TypeBadge）
-  - 28px × 28px，圆角 6px
-  - 单词（W）：二级背景色，次要文字色，18px
-  - 翻译（T）：`#FAEEDA` 背景，`#854F0B` 文字，18px
-  - 采集的段落：白底 + 0.5px 边框 + `Bookmark` 图标（14px 次要色）——不引入新颜色，靠形状区分
-- 采集的段落行：主文字是段落开头（单行截断），副文字是"出处 · 相对时间"，右侧是"N saved"；点击回到 `/read/:id`
-  - 左滑删除只删段落，卡片里的句子副本不受影响
-- 中（flex-1，min-width 0）：
-  - 主文字：13px，正常色，单行截断省略（`white-space: nowrap; overflow: hidden; text-overflow: ellipsis`）
-    - 单词：显示词原形（如"ephemeral"）
-    - 翻译：显示中文原文（超长截断）
-  - 副文字：11px，三级色，margin-top 1px
-    - 显示相对时间（"2 min ago" / "1 h ago" / "yesterday"）
-- 右（flex-shrink 0）：
-  - 已加入复习本："added"（11px，三级色，不可点击）
-  - 未加入："+ add"（11px，琥珀橙，可点击，点击后加入复习本并变为"added"）
+- 两个原生 `<select>` 并排各占一半：二级背景，圆角 10px，左侧图标（`ListFilter` / `ArrowDownUp`，16px 三级色），右侧 `ChevronDown`
+- **Status**：All statuses / Not added / New / Learning / Reviewing / Mastered，每项带这一栏的条数（不计搜索）。状态按条目算（`entryStatus()`）：
+  - 没有卡 → Not added
+  - 有卡还在学习步骤里（Learning / Relearning）→ Learning
+  - 全是新卡 → New
+  - 全是成熟卡（Review 状态且 stability ≥ 21 天，`isMature()`）→ Mastered
+  - 其余 → Reviewing
+- **Sort**：Recent（最后一次查询或加入，新的在前，按天分组）/ A–Z / Next review（最早到期的在前；没学过的排在后面，按字母）
+- Passages 没有 Status，也没有 Next review：从别的栏带过来的参数在这里不起作用（Next review 退回 Recent）
+- tab、status、sort、q 都写在 URL 参数里（`replace`，不进历史栈），从结果页返回时停在原处
+
+### 词 / 句子行
+
+- flex 横排，gap 12px，padding 10px 2px，0.5px 三级分隔线；点击打开结果页（`/lookup/:lemma` 或 `/translate/:hash`，只走缓存，不调 LLM、不写 history）
+- 左：词（18px）或中文原文（17px），单行截断；下面一行 14px 次要色：词是卡片上的义项（多张卡用 "; " 连起来），没卡时是缓存里的第一条释义；句子是口语版译文
+- 右，还没加入复习："+ add"（14px 琥珀橙）
+  - 词加缓存里最常用的那个义项（`addWordSenses()`，写入前重读复习本去重）；要别的义项，点开词用该义项上的 `+`
+  - 句子加整句（`addTranslationCard()`，按原文去重）
+  - Toast："Added to review" / "Already in review"
+- 右，已加入：
+  - 每张卡一格进度条（14×6px，圆角 2px，间距 3px），学得最好的在前：成熟卡琥珀橙，学过的卡 40% 琥珀，新卡二级边框色
+  - 下面一行（14px 三级色）是学过的卡里最早到期那张的 `dueLabel()`："due today" / "due tomorrow" / "in N days" / 红色 "overdue"；全是新卡时为 "new"——新卡的 `due_at` 只是加入时间，显示 overdue 会误导
+- 左滑露出 Delete（`SwipeToDelete`）：删掉这一条的全部 history 行和全部复习卡（本地 + Firestore），复习日志保留；`word_cache` / `translation_cache` 全体用户共享，绝不动。Toast "Removed from library"
+
+### 段落行（Passages）
+
+- 主文字是段落开头（17px，单行截断），副文字 "出处 · 相对时间"（14px 三级色）；右侧 "N saved"（14px 三级色）——语境指向这段的卡数
+- 点击回到 `/read/:id`；左滑删除只删段落（`deleteCapture()`），卡片里的句子副本不受影响
+
+### 空状态
+
+- 居中，内边距 48px 12px：`Library` 36px 三级色（块级居中），标题 18px weight500，说明 16px 次要色
+- Words 空："No words yet" + "Look up a word and it shows up here, ready to add to review." + 按钮 "Look up a word" → 首页
+- Sentences 空："No sentences yet" + "Translate something on Home and it shows up here."
+- Passages 空："No passages yet" + "Paste English into Read on Home and it shows up here."
+- 搜索或筛选没有结果："Nothing matches"；在词栏搜的像一个英文词或短语时，下面给按钮 "Look up “…”"，按查询词去查词页
 
 ---
 
@@ -515,13 +561,17 @@ AppBar
   中："Settings"（18px 次要色 weight400）
   右：28px 占位空白（保证标题真正居中）
 Body（padding 24px 18px，可滚动）
-  SectionTitle："账号"
+  SectionTitle："Account"
   AccountRow
+  SectionTitle："Review" + 一行说明
+  复习设置（8 项）
+  SectionTitle："Learning"
+  Chinese translation
 ```
 
 ### SectionTitle
 
-- "Account" / "Learning"，14px，三级文字色，全大写 + 字母间距 0.5px，weight 500，margin-bottom 12px
+- "Account" / "Review" / "Learning"，14px，三级文字色，全大写 + 字母间距 0.5px，weight 500，margin-bottom 12px；后两个上边距 28px
 - 界面文案统一用英文：这是一款英文优先的产品，设置页也不例外
 
 ### AccountRow
@@ -530,6 +580,35 @@ Body（padding 24px 18px，可滚动）
 - 左：`User` 图标（16px，次要色）+ 当前登录邮箱（17px，正常色）
 - 右："Sign out"按钮 —— `LogOut` 图标（14px）+ 文字（17px，次要色），无背景无边框
   - 点击：`logout()` 成功后 `navigate('/login', { replace: true })`
+
+### Review：复习设置
+
+写进 `ReviewSettings`（`src/db/settings.ts`），跟账号走：Firestore `users/{uid}/prefs/review` 一个文档，`subscribeReviewSettings` 把它镜像到本地 `settings` 的 `review_settings:{uid}`——每台设备排同样的队列、按同样的参数调度。标题下一行说明："Saved to your account, so every device studies the same way."（14px 次要色）。设置还没读到时这一节先不渲染。
+
+读出来的值都要过 `normalizeReviewSettings()`：数字夹到范围内，步骤重新校验，坏值退回默认——这个文档由各设备上不同版本的应用写入，一个坏值不能卡住队列和调度器。
+
+每项一行：名称 17px 正常色，说明 14px 次要色，控件在右边或下面；padding 14px 0，0.5px 三级分隔线。
+
+| 项 | 控件 | 默认 | 范围 / 作用 |
+|----|------|------|-------------|
+| New cards per day | 数字框（右，宽 92px，18px 居中） | 20 | 0–500；0 暂停新卡 |
+| Reviews per day | 数字框 | 200 | 0–5000；最快要忘的先做，其余明天 |
+| Target retention | 滑杆（下，琥珀橙）+ 右侧百分比（17px weight500） | 90% | 80%–97%，步长 1%；越高复习越多 |
+| Maximum interval | 数字框 | 36500 | 1–36500 天 |
+| Learning steps | 文本框（下，占满宽） | `1m 10m` | 整数 + m / h / d，空格或逗号分隔；留空则新卡直接按天排 |
+| Relearning steps | 文本框（空时 placeholder "None"） | `10m` | 同上，给忘了的卡 |
+| New cards | 分段控件：Newest first / Oldest first | Newest first | 刚查的先出 / 先来的先出 |
+| Pronounce words | 开关（右，50×30px，开时琥珀橙，`role="switch"`） | 关 | 介绍卡出现、揭晓答案时读出单词 |
+
+保存：
+
+- 数字框失焦或回车才保存——打 "150" 途中的 "15" 不会写进去。超出范围的夹回范围内，不是数字的退回已存的值，值没变不写
+- 滑杆松手才保存：用原生 `change` 事件，React 的 onChange 拖动时每一步都会触发；拖动时百分比跟着变
+- 步骤写错（如 `1.5m`）就留在框里：红色描边 + 下方 "Use whole numbers with m, h or d — like 1m 10m."（16px 红色），不保存；一改字提示就消失。写对的规整成单空格分隔
+- 分段控件和开关点一下即保存
+- `setReviewSettings(patch)` 在一个 Dexie 事务里读、合并、写，再把整份写到 Firestore：从数字框直接去点开关时，两次保存几乎同时发生，也不会互相覆盖
+- 别的设备改了设置、同步过来，框里显示的值跟着换
+- 和默认值不一样时，最后出现 "Reset to defaults"（16px 琥珀橙文字按钮），恢复全部默认，Toast "Review settings reset"；保存失败时 Toast "Couldn't save that — try again"
 
 ### Learning：Chinese translation
 
@@ -547,7 +626,7 @@ Body（padding 24px 18px，可滚动）
 
 Base URL、API key、模型名都不在这里，用户也无从配置：LLM 请求经 Cloudflare Worker
 代理，DeepSeek 密钥存在 Worker secret 中，模型由 `getModel()` 硬编码为 `deepseek-chat`。
-因此本屏没有表单、没有保存按钮，也没有底部 SaveBar。
+因此本屏没有 LLM 表单。复习设置逐项即时保存，所以也没有保存按钮和底部 SaveBar。
 
 ---
 
@@ -654,7 +733,7 @@ SenseSheet（点词后从底部升起）
 |------|------|
 | Loading | 调用 LLM 时，搜索框或翻译按钮显示 spinner，内容区显示骨架屏 |
 | Error | AppBar 下方显示错误横幅，包含错误原因和重试建议 |
-| Empty（复习本无内容） | 复习本列表显示空状态图："还没有加入复习的内容，查词或翻译后点击加入" |
-| Empty（历史无记录） | 历史列表显示空状态图："还没有查询记录" |
+| Empty（复习本无内容） | 复习页显示空状态："Nothing to review yet" + "Look up a word" 按钮（屏幕 5） |
+| Empty（词库无内容） | 词库各栏显示空状态："No words yet" / "No sentences yet" / "No passages yet"；搜索、筛选没结果时 "Nothing matches"（屏幕 8） |
 | Offline（缓存命中） | 正常展示，无特殊提示 |
 | Offline（需要 LLM） | 错误横幅："当前无网络连接，无法获取新内容" |
