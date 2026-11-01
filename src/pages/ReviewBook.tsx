@@ -30,7 +30,7 @@ export default function ReviewBook() {
   const todo = queue?.entries.length ?? 0
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh' }}>
+    <div className="screen">
       {/* AppBar */}
       <div style={{
         display: 'flex', alignItems: 'flex-end', gap: 10,

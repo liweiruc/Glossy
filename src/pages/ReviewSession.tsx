@@ -231,7 +231,7 @@ export default function ReviewSession() {
   // keyboard up when a hint is tapped.
   return (
     <div
-      style={{ display: 'flex', flexDirection: 'column', height: '100dvh' }}
+      className="screen"
       onMouseDown={e => {
         if (e.target instanceof Element && e.target.closest('button, summary')) e.preventDefault()
       }}

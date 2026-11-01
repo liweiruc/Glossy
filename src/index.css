@@ -41,6 +41,19 @@ body {
   position: relative;
 }
 
+/* The root of every full-height screen: a top bar, a scrolling body, maybe a bottom bar.
+   index.html asks for viewport-fit=cover, so on a phone the page runs under the status bar
+   and the notch — the strip where iOS paints its own frosted bar. Padding the top inset here
+   keeps each screen's title and buttons out of it. The inset is 0 on desktop and wherever the
+   system already keeps the page below the status bar, so nothing moves there. */
+.screen {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top);
+}
+
 @keyframes spin {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }

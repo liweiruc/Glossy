@@ -90,6 +90,7 @@ firestore.rules     Firestore 安全规则（需 firebase deploy 部署）
 - iOS 把独立 PWA 挂起后唤醒不触发 `load`，所以 `onRegisteredSW` 里挂了 `visibilitychange` → `registration.update()` 主动查更新；`public/_headers` 给 `sw.js` / `index.html` / `manifest.webmanifest` 配了 `Cache-Control: no-cache`，`sw.js` 被 HTTP 缓存挡住的话整条更新链路就断了
 - 环境变量：`VITE_FIREBASE_*` + `VITE_PROXY_URL`（本地开发写 `.env.local`）
 - 移动端优先（375px 基准宽度），桌面端居中显示，最大宽度 430px
+- **每个整屏的根节点用 `.screen`（`src/index.css`），别再手写 `height: 100dvh` 的容器**：`index.html` 的 `viewport-fit=cover` 让页面一直铺到状态栏和刘海下面，而 iOS 会在那一带画自己的毛玻璃状态栏——顶栏的标题和按钮要是从 y=0 开始，就被糊在里面看不清。`.screen` 在顶部垫了 `env(safe-area-inset-top)`（底部同理：`BottomNav` 和各页滚动区垫的是 `env(safe-area-inset-bottom)`）。桌面和系统本来就把页面放在状态栏下面的场景，这个值是 0，什么都不会动。`apple-mobile-web-app-status-bar-style` 保持 `default`：别的项目报告过，iOS 26.1 起 `black-translucent` 会在状态栏上叠一层页面关不掉的系统渐变 / 模糊；这个值是**添加到主屏幕时**读的，改了要删掉图标重新添加才生效
 - 极简风格，单一点缀色琥珀橙 `#BA7517`
 
 ## Firestore 安全规则

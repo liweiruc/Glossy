@@ -116,7 +116,7 @@ export default function Home() {
   )
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh' }}>
+    <div className="screen">
       {/* AppBar */}
       <div style={{ height: 48, display: 'flex', alignItems: 'center', padding: '0 18px', flexShrink: 0 }}>
         <div style={{ flex: 1 }} />
