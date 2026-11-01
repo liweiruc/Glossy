@@ -12,6 +12,9 @@ import { parseSteps } from '../algorithms/fsrs'
 import type { NewCardOrder } from '../algorithms/queue'
 import { useToast } from '../components/Toast'
 
+/** The commit this build came from (vite.config.ts). */
+declare const __BUILD_ID__: string
+
 const CHINESE_OPTIONS: { value: ChineseDisplay; label: string }[] = [
   { value: 'always', label: 'Always' },
   { value: 'tap', label: 'On tap' },
@@ -73,7 +76,7 @@ export default function Settings() {
       </div>
 
       {/* Body */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 18px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 18px calc(24px + env(safe-area-inset-bottom))' }}>
         <SectionTitle>Account</SectionTitle>
 
         <div style={{
@@ -173,6 +176,10 @@ export default function Settings() {
           English comes first everywhere. Tap 中文 on a sense when you are stuck.
         </div>
         <Segmented value={chinese} options={CHINESE_OPTIONS} onChange={setChineseDisplay} />
+
+        <div style={{ fontSize: 14, color: 'var(--text-tertiary)', marginTop: 36 }}>
+          Build {__BUILD_ID__}
+        </div>
       </div>
     </div>
   )

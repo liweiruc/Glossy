@@ -90,7 +90,9 @@ firestore.rules     Firestore 安全规则（需 firebase deploy 部署）
 - iOS 把独立 PWA 挂起后唤醒不触发 `load`，所以 `onRegisteredSW` 里挂了 `visibilitychange` → `registration.update()` 主动查更新；`public/_headers` 给 `sw.js` / `index.html` / `manifest.webmanifest` 配了 `Cache-Control: no-cache`，`sw.js` 被 HTTP 缓存挡住的话整条更新链路就断了
 - 环境变量：`VITE_FIREBASE_*` + `VITE_PROXY_URL`（本地开发写 `.env.local`）
 - 移动端优先（375px 基准宽度），桌面端居中显示，最大宽度 430px
-- **每个整屏的根节点用 `.screen`（`src/index.css`），别再手写 `height: 100dvh` 的容器**：`index.html` 的 `viewport-fit=cover` 让页面一直铺到状态栏和刘海下面，而 iOS 会在那一带画自己的毛玻璃状态栏——顶栏的标题和按钮要是从 y=0 开始，就被糊在里面看不清。`.screen` 在顶部垫了 `env(safe-area-inset-top)`（底部同理：`BottomNav` 和各页滚动区垫的是 `env(safe-area-inset-bottom)`）。桌面和系统本来就把页面放在状态栏下面的场景，这个值是 0，什么都不会动。`apple-mobile-web-app-status-bar-style` 保持 `default`：别的项目报告过，iOS 26.1 起 `black-translucent` 会在状态栏上叠一层页面关不掉的系统渐变 / 模糊；这个值是**添加到主屏幕时**读的，改了要删掉图标重新添加才生效
+- **每个整屏的根节点用 `.screen`（`src/index.css`），别再手写 `height: 100dvh` 的容器**：手机上页面一直铺到状态栏和刘海下面——`index.html` 有 `viewport-fit=cover`，而且 iOS 26 起主屏幕 web app 不管 `apple-mobile-web-app-status-bar-style` 写什么都全屏画（用户的 iPhone、iOS 27.0.1 上，`default` 照样铺到状态栏下面）。`.screen` 在顶部垫了 `env(safe-area-inset-top)`，顶栏的标题和按钮从状态栏下沿开始（底部同理：`BottomNav` 和各页滚动区垫的是 `env(safe-area-inset-bottom)`）。桌面和 Safari 标签页里这个值是 0，什么都不会动
+- **`index.html` 里的 `<div class="status-bar-fill">` 不能删**：iOS 27 会把页面画在状态栏下面的部分糊成一片渐变模糊，而且糊到 inset 下面还有一截（别的项目量过：inset 59px 时糊到约 100px），光靠 `.screen` 的内边距躲不开。页面顶边有一个真实的 `position: fixed` 元素时（报告的门槛：至少 6px 高、80% 宽、离顶边不超过 4px），iOS 改用它的底色把状态栏涂实，不再模糊。必须是真元素——iOS 不认 `::before` / `::after`，所以写在 `index.html` 里；颜色跟页面底色 `--bg-primary` 一致；高度就是 inset，桌面上是 0。z-index 100 跟 `BottomNav` 同层，在弹层遮罩（200）下面。`apple-mobile-web-app-status-bar-style` 留着 `default`：它是**添加到主屏幕时**读的，改了要删图标重装，而且据报告 iOS 26 起已经不起作用
+- Settings 页底的 `Build xxxxxxx` 是构建所用的 commit（`vite.config.ts` 的 `__BUILD_ID__`：Cloudflare Pages 上取 `CF_PAGES_COMMIT_SHA`，本地取 `git rev-parse`）。装在手机上的 PWA 要等 service worker 更新、页面自己 reload 一次才换版本——看这个号就知道手机上跑的是哪一版
 - 极简风格，单一点缀色琥珀橙 `#BA7517`
 
 ## Firestore 安全规则
