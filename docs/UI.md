@@ -30,7 +30,7 @@
 
 每个屏幕单独定义，参见各屏描述。通用规则：
 
-- 高度约 48px，水平内边距 18px。这 48px 不含状态栏 / 刘海：屏幕根节点用 `.screen`（`src/index.css`），它在 AppBar 上方垫 `env(safe-area-inset-top)`，标题和按钮才不会被系统状态栏盖住
+- 高度约 48px，水平内边距 18px。这 48px 不含状态栏 / 刘海：屏幕根节点用 `.screen`（`src/index.css`），它在 AppBar 上方垫 `env(safe-area-inset-top)`。安装版 iOS app 里该值为 0——`index.html` 不写 `apple-mobile-web-app-status-bar-style`，状态栏归平台，页面本来就从其下沿开始画；垫高只是仍报告 inset 的环境（旧 iOS、横屏刘海）的兜底，详见 CLAUDE.md
 - 左区：返回按钮（`ChevronLeft` 图标，20px）或页面标题
 - 中区：页面标题（首页为 App 名"Glossy"，子页为页面名）
 - 右区：操作图标（可选）

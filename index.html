@@ -7,7 +7,10 @@
     <meta name="theme-color" content="#BA7517" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <!-- apple-mobile-web-app-status-bar-style is deliberately absent: on iOS 26+ its mere
+         presence (any value, "default" included) makes installed web apps draw edge-to-edge
+         under the status bar, where iOS 27 blurs them. Omitting it hands the status bar back
+         to the platform, which lets .status-bar-fill paint it solid — see CLAUDE.md. -->
     <meta name="apple-mobile-web-app-title" content="Glossy" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />

@@ -7,39 +7,7 @@
 
 ## 技术栈
 
-- **框架**：React + Vite + TypeScript
-- **样式**：Tailwind CSS
-- **路由**：React Router
-- **本地数据库**：IndexedDB，通过 Dexie.js 封装
-- **云数据库 / 实时同步**：Firebase Firestore（persistentLocalCache + 多标签页管理）
-- **认证**：Firebase Auth（邮箱密码）
-- **词形还原**：compromise.js（纯前端，无需联网）
-- **PWA**：Workbox（Service Worker + 离线缓存）
-- **图标**：Lucide React
-- **LLM 代理**：Cloudflare Worker（`worker/`），校验 Firebase ID token 后转发 DeepSeek，流式返回
 - **部署**：前端 Cloudflare Pages / Vercel / Netlify 均可，需配置 `VITE_FIREBASE_*` 和 `VITE_PROXY_URL`；Worker 用 wrangler 单独部署
-
-## 目录结构
-
-```
-/src
-  /auth             Firebase Auth 上下文（AuthContext.tsx）
-  /components       可复用 UI 组件
-  /pages            页面级组件（Home、Lookup、Translate、CaptureText、Review、Library、Stats、Settings、Login、Register）
-  /db               Dexie schema（index.ts）、查询层（queries.ts）、Firestore 同步层（firestore-sync.ts）、词库（library.ts）、统计（stats.ts）、设置（settings.ts）
-  /algorithms       FSRS 调度（fsrs.ts）、复习队列与会话、作答判定等核心算法
-  /api              调用 Worker 代理（llm.ts）与错误处理
-  /prompts          查词、翻译、语境采集的 prompt 文本（独立文件，便于迭代）
-  /utils            lemmatize、hash、markTarget、sentenceAt 等工具函数
-  firebase.ts       Firebase app 初始化（Auth + Firestore）
-/worker
-  src/index.ts      Cloudflare Worker：校验 Firebase ID token → 调用 DeepSeek → 流式转发
-  wrangler.toml     Worker 配置（DEEPSEEK_API_KEY 是 secret，不在此文件里）
-/docs
-  PRD.md            完整产品需求文档
-  UI.md             每个屏幕的详细组件描述
-firestore.rules     Firestore 安全规则（需 firebase deploy 部署）
-```
 
 ## 认证与同步架构
 
@@ -90,28 +58,14 @@ firestore.rules     Firestore 安全规则（需 firebase deploy 部署）
 - iOS 把独立 PWA 挂起后唤醒不触发 `load`，所以 `onRegisteredSW` 里挂了 `visibilitychange` → `registration.update()` 主动查更新；`public/_headers` 给 `sw.js` / `index.html` / `manifest.webmanifest` 配了 `Cache-Control: no-cache`，`sw.js` 被 HTTP 缓存挡住的话整条更新链路就断了
 - 环境变量：`VITE_FIREBASE_*` + `VITE_PROXY_URL`（本地开发写 `.env.local`）
 - 移动端优先（375px 基准宽度），桌面端居中显示，最大宽度 430px
-- **每个整屏的根节点用 `.screen`（`src/index.css`），别再手写 `height: 100dvh` 的容器**：手机上页面一直铺到状态栏和刘海下面——`index.html` 有 `viewport-fit=cover`，而且 iOS 26 起主屏幕 web app 不管 `apple-mobile-web-app-status-bar-style` 写什么都全屏画（用户的 iPhone、iOS 27.0.1 上，`default` 照样铺到状态栏下面）。`.screen` 在顶部垫了 `env(safe-area-inset-top)`，顶栏的标题和按钮从状态栏下沿开始（底部同理：`BottomNav` 和各页滚动区垫的是 `env(safe-area-inset-bottom)`）。桌面和 Safari 标签页里这个值是 0，什么都不会动
-- **`index.html` 里的 `<div class="status-bar-fill">` 不能删**：iOS 27 会把页面画在状态栏下面的部分糊成一片渐变模糊，而且糊到 inset 下面还有一截（别的项目量过：inset 59px 时糊到约 100px），光靠 `.screen` 的内边距躲不开。页面顶边有一个真实的 `position: fixed` 元素时（报告的门槛：至少 6px 高、80% 宽、离顶边不超过 4px），iOS 改用它的底色把状态栏涂实，不再模糊。必须是真元素——iOS 不认 `::before` / `::after`，所以写在 `index.html` 里；颜色跟页面底色 `--bg-primary` 一致；高度就是 inset，桌面上是 0。z-index 100 跟 `BottomNav` 同层，在弹层遮罩（200）下面。`apple-mobile-web-app-status-bar-style` 留着 `default`：它是**添加到主屏幕时**读的，改了要删图标重装，而且据报告 iOS 26 起已经不起作用
+- **每个整屏的根节点用 `.screen`（`src/index.css`），别再手写 `height: 100dvh` 的容器**：`index.html` 有 `viewport-fit=cover`，但**故意不写 `apple-mobile-web-app-status-bar-style`**——只要这个 meta 存在（任何值，`default` 也算），安装到主屏幕的 app 就 edge-to-edge 画到状态栏下面，iOS 27 会在顶部糊一片系统级渐变模糊（scroll edge effect），而且 WebKit"用上端固定色块涂实状态栏"的机制在入口整个失效（obscured inset 为 0），页面上放任何 fixed 元素都去不掉（用户的 iPhone、iOS 27.0.1 实测：`.status-bar-fill` 在场照样糊，因为 `env(safe-area-inset-top)` 算出来是 0、元素 0px 高，且机制本身已被 gate 死）。删掉它，状态栏交还平台：布局视口缩短一个状态栏高度（约 59px），顶栏自然落在状态栏下方，`env(safe-area-inset-top)` 变 0。`.screen` 顶部的垫高只作仍报告 inset 的环境（旧 iOS、横屏刘海）的兜底；底部照旧由 `BottomNav` 和各页滚动区垫 `env(safe-area-inset-bottom)`。桌面和 Safari 标签页里这些值是 0，什么都不会动。**这个 meta 是添加到主屏幕时快照的，改动后要删掉图标重新添加才生效**
+- **`index.html` 里的 `<div class="status-bar-fill">` 不能删**：状态栏交还平台后，iOS 27 默认仍会对状态栏带糊系统模糊；WebKit 唯一的开关是上边缘存在一个可采纳的固定色块——在上边缘中央向内 4px 处命中测试一个点，盒子两个方向都超过 10px、宽度至少 80%，颜色读 computed style 的 `background-color`（不读绘制像素）。该元素在 standalone 下全宽、高 `max(env(safe-area-inset-top), 11px)`（新状态下 inset 为 0，11px 保证过门槛），底色 `--bg-primary` 跟页面一致，被采纳后 iOS 用它把状态栏涂成实心带、无模糊；`pointer-events: none` 防止挡顶栏点击。必须是真元素——iOS 不认 `::before` / `::after`，所以写在 `index.html` 里。桌面和 Safari 标签页里高度是 inset（0），不可见。z-index 100 跟 `BottomNav` 同层，在弹层遮罩（200）下面。以上全是无文档的 WebKit 行为（源自 `_shouldHideTopScrollPocket` / `fixedContainerEdges` 的社区源码分析，iOS 27 真机实测），将来官方出了 API 这行最先删
 - Settings 页底的 `Build xxxxxxx` 是构建所用的 commit（`vite.config.ts` 的 `__BUILD_ID__`：Cloudflare Pages 上取 `CF_PAGES_COMMIT_SHA`，本地取 `git rev-parse`）。装在手机上的 PWA 要等 service worker 更新、页面自己 reload 一次才换版本——看这个号就知道手机上跑的是哪一版
 - 极简风格，单一点缀色琥珀橙 `#BA7517`
 
 ## Firestore 安全规则
 
-见 `firestore.rules`：
-- `/word_cache/{lemma}`、`/translation_cache/{hash}`：任意已登录用户可读写
-- `/users/{userId}/**`：仅本人（`request.auth.uid == userId`）可读写
-
 首次部署或修改规则后需执行：`firebase deploy --only firestore:rules`
-
-## LLM 代理（Cloudflare Worker）
-
-见 `worker/src/index.ts`：
-- 只接受 POST，校验 `Authorization: Bearer <Firebase ID token>`——用 Firebase JWKS 做 RS256 验签，并检查 `exp` / `aud` / `iss`
-- 通过后用 Worker secret 里的 `DEEPSEEK_API_KEY` 请求 DeepSeek，`stream: true`、`temperature: 0.3`
-- 把 SSE 的 delta 拼成 `text/plain` 流式返回；前端 `fetchViaProxy` 边读边触发 `onStream`（保留了旧版 JSON 响应的兼容分支）
-- 模型白名单：`deepseek-chat`、`deepseek-reasoner`，其余一律 400
-
-部署：在 `worker/` 下执行 `npx wrangler deploy`；密钥用 `npx wrangler secret put DEEPSEEK_API_KEY` 设置（不要写进 `wrangler.toml`）。部署后把 Worker URL 填到前端的 `VITE_PROXY_URL`。
 
 ## 字体规范
 
@@ -132,7 +86,6 @@ firestore.rules     Firestore 安全规则（需 firebase deploy 部署）
 | 39  | LookupResult 词头 |
 | 42  | 复习介绍卡（IntroCard）词头 |
 
-- **字体平滑**：`-webkit-font-smoothing: antialiased`
 - **CSP**：`font-src 'self'`，不允许加载外部字体
 
 ## UI 参考

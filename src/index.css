@@ -42,10 +42,10 @@ body {
 }
 
 /* The root of every full-height screen: a top bar, a scrolling body, maybe a bottom bar.
-   On a phone the page runs under the status bar and the notch (viewport-fit=cover, and iOS 26+
-   does it to home-screen apps whatever their status-bar style), where .status-bar-fill sits.
-   Padding the top inset here starts each screen's title and buttons below it. The inset is 0 on
-   desktop and wherever the system keeps the page below the status bar, so nothing moves there. */
+   Installed iOS apps no longer draw under the status bar: index.html omits
+   apple-mobile-web-app-status-bar-style entirely, which hands the status bar back to the
+   platform, and the top inset reads 0 there. The padding stays for any environment that still
+   reports an inset (older iOS, landscape notches); it is 0 on desktop, so nothing moves. */
 .screen {
   display: flex;
   flex-direction: column;
@@ -54,13 +54,18 @@ body {
   padding-top: env(safe-area-inset-top);
 }
 
-/* iOS 27 blurs whatever a home-screen app draws under the status bar, in a band that reaches
-   past the inset, so padding alone can't keep a title clear of it. A real position: fixed
-   element on the top edge (reported minimum: 6px tall, 80% of the width, within 4px of the top)
-   makes iOS paint the status bar solid in that element's colour instead, with no blur. It must
-   be an element, which is why it lives in index.html: iOS ignores ::before / ::after for this.
-   Keep it the page colour. Its height is the inset, so it is 0 on desktop and in Safari tabs.
-   Same layer as BottomNav: above the page, under the popups' backdrops (200). */
+/* iOS 27 blurs the status-bar band of a home-screen app unless WebKit can adopt a "fixed colour
+   extension" from the page: it hit-tests one point 4px inside the top-centre edge and takes the
+   computed background-color of any fixed/sticky box there that is more than 10px in both
+   directions and at least 80% of the viewport wide. This only works because index.html omits
+   apple-mobile-web-app-status-bar-style (the status bar belongs to the platform; with that meta
+   present the app draws edge-to-edge and the whole mechanism is dead at the gate). This div is
+   the candidate that paints the band solid. In standalone the top inset reads 0 — the page no
+   longer runs under the status bar — hence the 11px floor, just over WebKit's 10px threshold.
+   It must be a real element: iOS ignores ::before / ::after here. Keep it the page colour, and
+   pointer-events: none so it never eats taps on the top bar. On desktop and in Safari tabs the
+   height is the inset (0) and it disappears. Same layer as BottomNav: above the page, under the
+   popups' backdrops (200). */
 .status-bar-fill {
   position: fixed;
   top: 0;
@@ -69,6 +74,13 @@ body {
   height: env(safe-area-inset-top);
   background-color: var(--bg-primary);
   z-index: 100;
+  pointer-events: none;
+}
+
+@media (display-mode: standalone) {
+  .status-bar-fill {
+    height: max(env(safe-area-inset-top), 11px);
+  }
 }
 
 @keyframes spin {
